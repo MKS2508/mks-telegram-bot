@@ -1,6 +1,8 @@
 import { loadEnvConfig } from './env.js'
 import type { BotConfig } from '../types/bot.js'
 import { EnvKeys } from '../types/constants.js'
+import { existsSync } from 'fs'
+import { resolve } from 'path'
 
 let cachedConfig: BotConfig | null = null
 
@@ -28,6 +30,26 @@ export function getConfig(): BotConfig {
   }
 
   return cachedConfig
+}
+
+export function getEnvFilePath(): string {
+  // 1. Check if explicit environment file path is set
+  const explicitPath = process.env.TG_ENV_FILE
+  if (explicitPath) {
+    return explicitPath
+  }
+
+  // 2. Use TG_ENV to determine which file to load
+  const tgEnv = process.env.TG_ENV || 'local'
+
+  // 3. Check if environment file exists
+  const envPath = resolve('./core/.env.' + tgEnv)
+  if (existsSync(envPath)) {
+    return envPath
+  }
+
+  // 4. Fall back to base .env
+  return resolve('./core/.env')
 }
 
 export function updateConfig(updates: Partial<BotConfig>): BotConfig {

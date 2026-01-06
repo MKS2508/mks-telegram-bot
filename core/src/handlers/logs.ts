@@ -1,6 +1,6 @@
 import type { Context, Telegraf } from 'telegraf'
 import { getConfig, hasLoggingConfigured } from '../config/index.js'
-import { streamLogger, botLogger } from '../middleware/logging.js'
+import { streamLogger, botLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { formatLogEntry } from '../utils/formatters.js'
 
 const LOG_BUFFER_SIZE = 10
@@ -55,7 +55,12 @@ class LogStreamer {
 
       await this.bot.telegram.sendMessage(config.logChatId, fullMessage, extra)
     } catch (error) {
-      botLogger.error('Failed to send logs to Telegram:', error)
+      botLogger.error(
+        `${badge('STREAM', 'rounded')} ${kv({
+          status: colorText('FAILED', colors.error),
+          error: error instanceof Error ? error.message : String(error),
+        })}`
+      )
     }
 
     this.logBuffer = []
@@ -74,7 +79,13 @@ let logStreamer: LogStreamer | null = null
 
 export function initializeLogStreamer(bot: Telegraf): void {
   logStreamer = new LogStreamer(bot)
-  streamLogger.info('Log streamer initialized')
+  streamLogger.success(
+    `${badge('STREAM', 'rounded')} ${kv({
+      status: colorText('initialized', colors.success),
+      bufferSize: LOG_BUFFER_SIZE,
+      bufferTimeout: `${LOG_BUFFER_TIMEOUT}ms`,
+    })}`
+  )
 }
 
 export async function sendLogToTelegram(
@@ -97,6 +108,14 @@ export async function handleLogsCommand(ctx: Context): Promise<void> {
 
   const isEnabled = logStreamer !== null
   const status = isEnabled ? 'enabled' : 'disabled'
+
+  streamLogger.info(
+    `${badge('QUERY', 'rounded')} ${kv({
+      cmd: '/logs',
+      status: colorText(status, isEnabled ? colors.success : colors.dim),
+      user: ctx.from?.id ?? 'unknown',
+    })}`
+  )
 
   await ctx.reply(
     `📝 *Log Streaming Status:* \`${status}\`\n\nChat ID: \`${config.logChatId}\`${

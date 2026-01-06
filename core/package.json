@@ -8,8 +8,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@mks2508/better-logger": "^3.1.0",
-    "@mks2508/no-throw": "^0.1.0",
+    "@mks2508/telegram-bot-utils": "workspace:*",
     "telegraf": "^4.16.3",
     "zod": "^3.24.0"
   }

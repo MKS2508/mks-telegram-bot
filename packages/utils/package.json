@@ -1,0 +1,12 @@
+{
+  "name": "@mks2508/telegram-bot-utils",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mks2508/better-logger": "^4.0.0",
+    "@mks2508/no-throw": "^0.1.0"
+  }
+}

@@ -8,7 +8,8 @@ dist/
 # Environment
 .env
 .env.local
-.env.*.local
+.env.staging
+.env.production
 
 # OS
 .DS_Store
@@ -28,3 +29,7 @@ core/bun.lock
 
 # Test coverage
 coverage/
+
+# Instance lock files
+core/tmp/*.pid
+core/tmp/*.lock

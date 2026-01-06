@@ -1,16 +1,32 @@
 import type { Context } from 'telegraf'
 import { updateConfig, getConfig } from '../config/index.js'
-import { botLogger, controlLogger } from '../middleware/logging.js'
+import { botLogger, controlLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { botManager } from '../utils/bot-manager.js'
 
 export async function handleStop(ctx: Context): Promise<void> {
-  botLogger.info('Stop command received')
+  const userId = ctx.from?.id ?? 'unknown'
+
+  botLogger.info(
+    `${badge('CONTROL', 'rounded')} ${kv({
+      cmd: colorText('/stop', colors.command),
+      user: colorText(String(userId), colors.user),
+    })}`
+  )
+
   ctx.reply('🛑 Shutting down bot...')
   process.exit(0)
 }
 
 export async function handleRestart(ctx: Context): Promise<void> {
-  botLogger.info('Restart command received')
+  const userId = ctx.from?.id ?? 'unknown'
+
+  botLogger.info(
+    `${badge('CONTROL', 'rounded')} ${kv({
+      cmd: colorText('/restart', colors.command),
+      user: colorText(String(userId), colors.user),
+    })}`
+  )
+
   ctx.reply('🔄 Restarting bot...')
   botManager.resetStats()
   ctx.reply('✅ Bot stats reset. Restarting...')
@@ -40,7 +56,13 @@ export async function handleMode(ctx: Context): Promise<void> {
 
   updateConfig({ mode })
   ctx.reply(`✅ Mode changed to: \`${mode}\``, { parse_mode: 'Markdown' })
-  controlLogger.info(`Mode changed to ${mode}`)
+
+  controlLogger.info(
+    `${badge('MODE', 'rounded')} ${kv({
+      newMode: colorText(mode, colors.info),
+      user: ctx.from?.id ?? 'unknown',
+    })}`
+  )
 }
 
 export async function handleWebhook(ctx: Context): Promise<void> {
@@ -53,4 +75,11 @@ export async function handleWebhook(ctx: Context): Promise<void> {
 
   const message = `🔗 *Webhook Configuration:*\n\nURL: \`${config.webhookUrl || 'Not set'}\``
   ctx.reply(message, { parse_mode: 'Markdown' })
+
+  controlLogger.info(
+    `${badge('WEBHOOK', 'rounded')} ${kv({
+      url: config.webhookUrl ?? 'not configured',
+      user: ctx.from?.id ?? 'unknown',
+    })}`
+  )
 }

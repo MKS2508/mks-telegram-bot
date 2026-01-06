@@ -5,17 +5,23 @@
   "type": "module",
   "workspaces": [
     "core",
+    "packages/*",
     "apps/*"
   ],
   "scripts": {
     "dev": "bun run --filter @mks2508/telegram-bot-core dev",
     "start": "bun run --filter @mks2508/telegram-bot-core start",
+    "cli": "bun run tools/index.ts",
+    "ngrok": "bun run tools/index.ts ngrok",
     "typecheck": "tsgo",
     "typecheck:core": "bun run --filter @mks2508/telegram-bot-core typecheck",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
     "clean": "rm -rf node_modules apps/*/node_modules core/node_modules"
   },
   "devDependencies": {
@@ -24,5 +30,12 @@
     "oxlint": "latest",
     "prettier": "^3.4.2",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.1.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "glob": "^13.0.0"
   }
 }

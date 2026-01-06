@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { BotTimeouts, BotLimits } from '../types/constants.js'
 
+export enum Environment {
+  LOCAL = 'local',
+  STAGING = 'staging',
+  PRODUCTION = 'production',
+}
+
 export interface EnvConfig {
   botToken: string
   mode: 'polling' | 'webhook'
@@ -11,6 +17,23 @@ export interface EnvConfig {
   controlChatId?: string
   controlTopicId?: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
+
+  // Environment identification
+  environment: Environment
+  instanceName: string
+  instanceId?: string
+
+  // Instance detection
+  instanceCheck: boolean
+  lockBackend: 'pid' | 'redis'
+  redisUrl?: string
+
+  // ngrok configuration
+  ngrokEnabled: boolean
+  ngrokPort: number
+  ngrokDomain?: string
+  ngrokRegion: string
+  ngrokAuthToken?: string
 }
 
 const envSchema = z.object({
@@ -29,6 +52,37 @@ const envSchema = z.object({
   TG_TIMEOUT: z.coerce.number().min(1000).default(BotTimeouts.COMMAND_RESPONSE),
   TG_MAX_RETRIES: z.coerce.number().min(1).max(10).default(3),
   TG_COMMAND_PREFIX: z.string().max(10).default('/'),
+  // File logging configuration
+  TG_LOG_FILE_ENABLED: z.string().optional(),
+  TG_LOG_DIR: z.string().optional(),
+  TG_LOG_MAX_SIZE: z.coerce.number().min(1024).optional(),
+  TG_LOG_MAX_FILES: z.coerce.number().min(1).max(100).optional(),
+  TG_LOG_LEVELS: z.string().optional(),
+
+  // === Environment Identification ===
+  TG_ENV: z.enum(['local', 'staging', 'production']).default('local'),
+  TG_INSTANCE_NAME: z.string().default('mks-bot'),
+  TG_INSTANCE_ID: z.string().optional(),
+
+  // === Instance Detection ===
+  TG_INSTANCE_CHECK: z.coerce.boolean().default(true),
+  TG_LOCK_BACKEND: z.enum(['pid', 'redis']).default('pid'),
+  TG_REDIS_URL: z.string().optional(),
+
+  // === ngrok Configuration ===
+  TG_NGROK_ENABLED: z.coerce.boolean().default(false),
+  TG_NGROK_PORT: z.coerce.number().default(3000),
+  TG_NGROK_DOMAIN: z.string().optional(),
+  TG_NGROK_REGION: z.string().default('us'),
+  TG_NGROK_AUTH_TOKEN: z.string().optional(),
+}).refine((data) => {
+  // Webhook URL validation when mode is webhook
+  if (data.TG_MODE === 'webhook' && !data.TG_WEBHOOK_URL && !data.TG_NGROK_ENABLED) {
+    return false
+  }
+  return true
+}, {
+  message: 'TG_WEBHOOK_URL is required when TG_MODE=webhook and TG_NGROK_ENABLED=false',
 })
 
 /**
@@ -46,10 +100,6 @@ export function loadEnvConfig(): EnvConfig {
 
   const env = result.data
 
-  if (env.TG_MODE === 'webhook' && !env.TG_WEBHOOK_URL) {
-    throw new Error('TG_WEBHOOK_URL is required when TG_MODE=webhook')
-  }
-
   return {
     botToken: env.TG_BOT_TOKEN,
     mode: env.TG_MODE,
@@ -60,5 +110,22 @@ export function loadEnvConfig(): EnvConfig {
     controlChatId: env.TG_CONTROL_CHAT_ID,
     controlTopicId: env.TG_CONTROL_TOPIC_ID,
     logLevel: env.LOG_LEVEL,
+
+    // Environment identification
+    environment: env.TG_ENV as Environment,
+    instanceName: env.TG_INSTANCE_NAME,
+    instanceId: env.TG_INSTANCE_ID,
+
+    // Instance detection
+    instanceCheck: env.TG_INSTANCE_CHECK,
+    lockBackend: env.TG_LOCK_BACKEND,
+    redisUrl: env.TG_REDIS_URL,
+
+    // ngrok configuration
+    ngrokEnabled: env.TG_NGROK_ENABLED,
+    ngrokPort: env.TG_NGROK_PORT,
+    ngrokDomain: env.TG_NGROK_DOMAIN,
+    ngrokRegion: env.TG_NGROK_REGION,
+    ngrokAuthToken: env.TG_NGROK_AUTH_TOKEN,
   }
 }

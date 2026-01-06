@@ -4,21 +4,43 @@ import { errorHandler } from './middleware/error-handler.js'
 import { topicValidation } from './middleware/topics.js'
 import { botLogger, kv, badge, colorText, colors } from './middleware/logging.js'
 import { botManager } from './utils/bot-manager.js'
+import { getInstanceManager } from './utils/instance-manager.js'
 import { handleHealth, handleUptime, handleStats } from './handlers/health.js'
 import { handleStop, handleRestart, handleMode, handleWebhook } from './handlers/control.js'
 import { handleLogsCommand, initializeLogStreamer } from './handlers/logs.js'
 import { auth } from './middleware/auth.js'
+import { initializeFileLogging } from './config/logging.js'
 
 async function main(): Promise<void> {
   const config = getConfig()
+  const instanceManager = getInstanceManager(config)
+
+  // Initialize file logging first (before any logger usage)
+  initializeFileLogging()
 
   botLogger.info(
     `${badge('START', 'pill')} ${kv({
+      environment: colorText(config.environment, colors.info),
+      instance: colorText(config.instanceName, colors.dim),
       mode: colorText(config.mode, colors.info),
       logLevel: config.logLevel,
-      debug: config.debug,
+      instanceCheck: config.instanceCheck ? colorText('enabled', colors.success) : colorText('disabled', colors.dim),
     })}`
   )
+
+  // Try to acquire instance lock
+  const lockResult = await instanceManager.acquireLock()
+  if (!lockResult.ok) {
+    botLogger.error(
+      `${badge('INSTANCE', 'rounded')} ${kv({
+        error: colorText('CONFLICT', colors.error),
+        message: lockResult.error.message,
+      })}`
+    )
+    botLogger.error('Cannot start bot due to instance conflict. Exiting...')
+    process.exit(1)
+  }
+
   botLogger.info(
     `${badge('CONFIG', 'rounded')} ${kv({
       logging: hasLoggingConfigured()
@@ -86,13 +108,15 @@ async function main(): Promise<void> {
 
   bot.command('logs', handleLogsCommand)
 
-  process.once('SIGINT', () => {
+  process.once('SIGINT', async () => {
     botLogger.info(`${badge('SHUTDOWN', 'pill')} ${colorText('SIGINT received', colors.warning)}`)
+    await instanceManager.releaseLock()
     bot.stop('SIGINT')
   })
 
-  process.once('SIGTERM', () => {
+  process.once('SIGTERM', async () => {
     botLogger.info(`${badge('SHUTDOWN', 'pill')} ${colorText('SIGTERM received', colors.warning)}`)
+    await instanceManager.releaseLock()
     bot.stop('SIGTERM')
   })
 
@@ -132,6 +156,6 @@ function hasControlConfigured(): boolean {
 }
 
 main().catch((error) => {
-  console.error('Fatal error starting bot:', error)
+  botLogger.critical('Fatal error starting bot:', error)
   process.exit(1)
 })

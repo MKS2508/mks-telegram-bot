@@ -1,6 +1,6 @@
 import type { Context, Middleware } from 'telegraf'
 import type { Result, BotError } from './result.js'
-import { commandLogger } from '../middleware/logging.js'
+import { commandLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { botManager } from './bot-manager.js'
 
 export interface CommandConfig {
@@ -15,17 +15,39 @@ export type CommandHandler = (ctx: Context, args: string[]) => Promise<Result<vo
 
 export function createCommandHandler(config: CommandConfig): Middleware<Context> {
   return async (ctx, next) => {
-    commandLogger.info(`Command ${config.name} from user ${ctx.from?.id}`)
+    const userId = ctx.from?.id ?? 'unknown'
+    const username = ctx.from?.username ?? 'no-username'
+
+    commandLogger.info(
+      `${badge('CMD', 'rounded')} ${kv({
+        cmd: colorText(`/${config.name}`, colors.command),
+        user: colorText(String(userId), colors.user),
+        username: colorText(`@${username}`, colors.dim),
+      })}`
+    )
 
     const args = extractArgs(ctx)
 
     const result = await config.handler(ctx, args)
 
     if (!result.ok) {
-      commandLogger.error(`Command ${config.name} failed: ${result.error.message}`)
+      commandLogger.error(
+        `${badge('FAIL', 'rounded')} ${kv({
+          cmd: `/${config.name}`,
+          user: userId,
+          error: result.error.message,
+        })}`
+      )
       await ctx.reply(`❌ ${result.error.message}`)
       return
     }
+
+    commandLogger.success(
+      `${badge('OK', 'rounded')} ${kv({
+        cmd: `/${config.name}`,
+        user: userId,
+      })}`
+    )
 
     if (config.stats) {
       botManager.incrementCommands()

@@ -8,6 +8,23 @@ export interface EnvConfig {
   controlChatId?: string
   controlTopicId?: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
+
+  // Environment identification
+  environment: 'local' | 'staging' | 'production'
+  instanceName: string
+  instanceId?: string
+
+  // Instance detection
+  instanceCheck: boolean
+  lockBackend: 'pid' | 'redis'
+  redisUrl?: string
+
+  // ngrok configuration
+  ngrokEnabled: boolean
+  ngrokPort: number
+  ngrokDomain?: string
+  ngrokRegion: string
+  ngrokAuthToken?: string
 }
 
 export interface BotConfig extends EnvConfig {
