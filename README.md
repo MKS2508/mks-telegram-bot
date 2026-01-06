@@ -2,6 +2,8 @@
 
 > Template monorepo para bots de Telegram con Bun, Telegraf y TypeScript
 
+[![Use this template](https://github.com/MKS2508/mks-telegram-bot/generate)](https://github.com/MKS2508/mks-telegram-bot/generate)
+
 Template listo para producción con soporte multi-entorno, multi-instancia, y las mejores prácticas de desarrollo.
 
 ## Quick Start (5 min)
@@ -20,9 +22,13 @@ Habla con [@BotFather](https://t.me/BotFather) en Telegram:
 ### 2. Instalar y Configurar
 
 ```bash
-# Clonar/fork el template
-git clone <tu-repo>
-cd mks-telegram-bot
+# Usar el template
+# Click en "Use this template" arriba → Create a new repository
+# O con CLI: gh repo create my-bot --template MKS2508/mks-telegram-bot
+
+# Clonar tu nuevo repo
+git clone https://github.com/TU_USUARIO/my-bot.git
+cd my-bot
 
 # Instalar dependencias
 bun install
