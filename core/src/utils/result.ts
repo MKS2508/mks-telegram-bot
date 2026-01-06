@@ -1,4 +1,3 @@
-export type { Result, Ok, Err, BotError, BotErrorCode } from '../types/result.js'
 export {
   ok,
   err,
@@ -15,5 +14,13 @@ export {
   match,
   collect,
   all,
+  fail,
   botError,
+  resultError,
+  UNKNOWN_ERROR,
+  type Result,
+  type Ok,
+  type Err,
+  type BotError,
+  type BotErrorCode,
 } from '../types/result.js'

@@ -16,6 +16,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@mks2508/better-logger": "^3.1.0",
+        "@mks2508/no-throw": "^0.1.0",
         "telegraf": "^4.16.3",
         "zod": "^3.24.0",
       },
@@ -23,6 +24,8 @@
   },
   "packages": {
     "@mks2508/better-logger": ["@mks2508/better-logger@3.1.0", "", { "dependencies": { "chalk": "^5.6.2" } }, "sha512-qqSZsXHGL5xMaGoFuhsUVgSw5pokdDBWvGksGSss2MikzP4BPHnS42YYdYWER+zNL4B2OSYV8VBe0SUUEo5wSA=="],
+
+    "@mks2508/no-throw": ["@mks2508/no-throw@0.1.0", "", {}, "sha512-/CI8FqiO3oLw66XIQ07mw13b6PDNh1vit0cGzUBLq5MfJUTKDU0yaKFE0l9CqSpe6xv4n4+z4RWEytP5xePKZQ=="],
 
     "@mks2508/telegram-bot-core": ["@mks2508/telegram-bot-core@workspace:core"],
 
