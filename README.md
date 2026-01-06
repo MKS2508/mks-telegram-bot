@@ -1,78 +1,134 @@
 # mks-telegram-bot
 
-Template monorepo para bots de Telegram con Bun, Telegraf y TypeScript.
+> Template monorepo para bots de Telegram con Bun, Telegraf y TypeScript
 
-## Quick Start
+Template listo para producción con soporte multi-entorno, multi-instancia, y las mejores prácticas de desarrollo.
+
+## Quick Start (5 min)
+
+### 1. Crear el Bot
+
+Habla con [@BotFather](https://t.me/BotFather) en Telegram:
+
+```
+/newbot
+→ Nombre: MyBot
+→ Username: my_awesome_bot
+→ Copia el token (ej: 123456:ABC-DEF1234...)
+```
+
+### 2. Instalar y Configurar
 
 ```bash
-# Clonar o usar como template
-bun create mks2508/mks-telegram-bot my-bot
+# Clonar/fork el template
+git clone <tu-repo>
+cd mks-telegram-bot
 
 # Instalar dependencias
 bun install
 
-# Configurar variables de entorno
-cp core/.env.example core/.env
+# Setup interactivo (crea .env.local)
+bun run setup
+```
 
-# Desarrollo
+El comando `setup` te preguntará:
+- Bot token (pega el token de @BotFather)
+- Modo (polling para desarrollo)
+- Chat IDs opcionales
+
+### 3. Arrancar en Desarrollo
+
+```bash
 bun run dev
 ```
 
-## Estructura
+### 4. Probar
+
+Envía `/start` o `/health` a tu bot en Telegram.
+
+## Comandos CLI
+
+| Comando | Descripción |
+| ------- | ----------- |
+| `bun run setup` | Configuración interactiva de entorno |
+| `bun run setup:staging` | Setup para entorno staging |
+| `bun run setup:production` | Setup para producción |
+| `bun run doctor` | Diagnóstico de configuración |
+| `bun run cli status` | Ver instancias corriendo |
+| `bun run ngrok` | ngrok con webhook auto-config |
+
+## Scripts de Desarrollo
+
+| Script | Descripción |
+| ------ | ----------- |
+| `bun run dev` | Hot reload (development) |
+| `bun run start` | Production start |
+| `bun run build` | Typecheck + lint |
+| `bun run test` | Ejecutar tests |
+| `bun run typecheck` | Type-check con tsgo |
+| `bun run lint` | Lint con oxlint |
+
+## Documentación
+
+| Documento | Descripción |
+| --------- | ----------- |
+| [Getting Started](./docs/getting-started.md) | Guía de inicio paso a paso |
+| [Environment](./docs/environment.md) | Variables de entorno |
+| [CLI Commands](./docs/cli-commands.md) | Comandos CLI disponibles |
+| [Development](./docs/development.md) | Flujo de desarrollo |
+| [Troubleshooting](./docs/troubleshooting.md) | Problemas comunes |
+
+**Documentación adicional:**
+- [CLAUDE.md](./CLAUDE.md) - Entry point principal
+- [CLAUDE.dev.md](./CLAUDE.dev.md) - Guía de desarrollo
+- [CLAUDE.deploy.md](./CLAUDE.deploy.md) - Deployment y entornos
+
+## Estructura del Monorepo
 
 ```
 mks-telegram-bot/
-├── core/                 # @mks2508/telegram-bot-core
+├── core/              # Bot principal (@mks2508/telegram-bot-core)
+│   ├── src/
+│   │   ├── index.ts      # Entry point
+│   │   ├── config/       # Configuration & env validation
+│   │   ├── handlers/     # Command handlers
+│   │   ├── middleware/   # Telegraf middleware
+│   │   ├── types/        # TypeScript types & Result pattern
+│   │   └── utils/        # Utilities (bot-manager, instance-manager)
+│   └── .env.example      # Template de variables de entorno
+├── packages/utils/      # Utilidades compartidas (@mks2508/telegram-bot-utils)
 │   └── src/
-│       ├── index.ts      # Entry point
-│       ├── config/       # Configuration & env validation
-│       ├── types/        # TypeScript types & Result pattern
-│       ├── middleware/   # Telegraf middleware
-│       ├── handlers/     # Command handlers
-│       └── utils/        # Utilities
-└── apps/                 # Future: docs, examples
+│       ├── logger.ts     # Better Logger setup
+│       └── result.ts     # Result type pattern
+├── tools/              # CLI tools
+│   └── commands/
+│       ├── setup.ts     # Interactive setup
+│       ├── doctor.ts    # Diagnostics
+│       ├── status.ts    # Instance status
+│       └── ngrok.ts     # ngrok integration
+├── docs/               # Documentación
+│   ├── getting-started.md
+│   ├── environment.md
+│   ├── cli-commands.md
+│   ├── development.md
+│   ├── troubleshooting.md
+│   └── examples/       # Ejemplos de código
+└── apps/               # Apps de ejemplo (futuro)
 ```
 
-## Stack
+## Stack Tecnológico
 
-| Herramienta       | Uso                       |
-| ----------------- | ------------------------- |
-| **Bun**           | Runtime & package manager |
-| **Telegraf**      | Telegram Bot API          |
-| **Zod**           | Schema validation         |
-| **Better Logger** | Logging (v4.0.0)           |
-| **@mks2508/no-throw** | Result type pattern |
-| **tsgo**          | Type checking             |
-| **oxlint**        | Linting                   |
-| **prettier**      | Formatting                |
-| **bun test**      | Testing framework         |
-
-## Scripts
-
-### Desarrollo
-
-```bash
-bun run dev           # Dev mode con watch
-bun run start         # Production
-```
-
-### Calidad de Código
-
-```bash
-bun run typecheck     # Type check con tsgo
-bun run lint          # Lint con oxlint
-bun run lint:fix      # Fix linting issues
-bun run format        # Format con prettier
-bun run format:check  # Check formatting
-```
-
-### Testing
-
-```bash
-bun test              # Run all tests
-bun run test:watch    # Watch mode
-bun run test:coverage # Coverage report
-```
+| Herramienta | Versión | Uso |
+| ----------- | ------ | --- |
+| **Bun** | 1.3+ | Runtime & package manager |
+| **TypeScript** | 5.9+ | Lenguaje |
+| **Telegraf** | 4.16+ | Telegram Bot API |
+| **Zod** | 3.24+ | Schema validation |
+| **Better Logger** | 4.0.0 | Logging |
+| **@mks2508/no-throw** | 0.1.0 | Result type pattern |
+| **tsgo** | native-preview | Type checking |
+| **oxlint** | latest | Linting |
+| **prettier** | 3.4+ | Formatting |
 
 ## Features
 
@@ -83,59 +139,69 @@ bun run test:coverage # Coverage report
 - ✅ Configuración centralizada con Zod validation
 - ✅ Singleton pattern para BotManager y Config
 
-### Bot Commands
+### Multi-Entorno
+- ✅ Soporte para local, staging, production
+- ✅ Archivos `.env.{environment}` separados
+- ✅ Selección vía `TG_ENV`
+- ✅ Setup CLI interactivo
 
-**Public Commands**:
-- `/start` - Welcome message con lista de comandos
-- `/health` - Health check del bot
-- `/uptime` - Información de uptime
-- `/stats` - Estadísticas de uso
-- `/logs` - Status de log streaming
-
-**Control Commands** (requieren autorización):
-- `/stop` - Graceful shutdown
-- `/restart` - Restart con stats reset
-- `/mode` - Cambiar entre polling/webhook
-- `/webhook` - Ver/configurar webhook
+### Multi-Instancia
+- ✅ Lock management con archivos PID
+- ✅ Detección de conflictos
+- ✅ Status CLI para ver instancias
+- ✅ Doctor CLI para diagnóstico
 
 ### Logging System
-
 Tres destinos de logging usando Better Logger 4.0.0:
 
 1. **Console** - Colored output con preset cyberpunk
 2. **File** - Logs persistentes con rotación automática
 3. **Telegram** - Streaming a chat con buffering
 
-Configuración vía variables de entorno:
-```bash
-LOG_LEVEL=info                    # Nivel de log
-TG_LOG_FILE_ENABLED=true         # Habilitar file logging
-TG_LOG_DIR=./logs                # Directorio de logs
-TG_LOG_MAX_SIZE=1048576           # Max file size (1MB)
-TG_LOG_LEVELS=info,warn,error     # Niveles para archivos
-TG_LOG_CHAT_ID=-1001234567890     # Chat ID para streaming
-```
+### Bot Commands
 
-### Middleware
+**Public Commands**:
+- `/start` - Welcome message
+- `/health` - Health check
+- `/uptime` - Uptime info
+- `/stats` - Statistics
+- `/logs` - Log streaming status
 
-- **ErrorHandler** - Captura y maneja errores globalmente
-- **TopicValidation** - Valida mensajes de forum topics
-- **Auth** - Autorización para control commands
-
-### Architecture
-
-```
-Update → ErrorHandler → TopicValidation → Auth → Handler → BotManager → Response
-```
+**Control Commands** (requieren autorización):
+- `/stop` - Graceful shutdown
+- `/restart` - Restart con stats reset
+- `/mode` - Switch polling/webhook
+- `/webhook` - Webhook configuration
 
 ## Development Workflow
 
-### Antes de commitear
+### Setup Inicial
 
 ```bash
-bun run typecheck     # Debe pasar sin errores
-bun run lint          # Debe pasar (0 warnings, 0 errors)
-bun test              # Todos los tests deben pasar
+# Instalar dependencias
+bun install
+
+# Setup interactivo
+bun run setup
+
+# Verificar configuración
+bun run doctor
+
+# Arrancar en desarrollo
+bun run dev
+```
+
+### Antes de Commitear
+
+```bash
+# Verificar tipo y lint
+bun run build
+
+# Ejecutar tests
+bun test
+
+# O usar precommit
+bun run precommit
 ```
 
 ### Code Style
@@ -145,9 +211,29 @@ bun test              # Todos los tests deben pasar
 - Result type pattern para error handling
 - Better Logger para logging (no console.*)
 
-## TODO
+## Examples
 
-- [ ] Docker configuration
-- [ ] Deployment scripts
-- [ ] Ejemplos en `apps/`
-- [ ] CLI para scaffolding
+Ver [`docs/examples/`](./docs/examples/) para ejemplos completos:
+
+- [Simple Command](./docs/examples/simple-command.md) - Crear comandos
+- [Auth Middleware](./docs/examples/middleware-auth.md) - Middleware de autenticación
+- [Webhook Setup](./docs/examples/webhook-setup.md) - Configurar webhook
+
+## Deployment
+
+El template incluye configuración para:
+
+- **Docker** - Dockerfile multi-stage incluido
+- **VPS** - Guía para deployment en VPS
+- **ngrok** - Integración para testing local
+- **Multi-entorno** - local, staging, production
+
+Ver [CLAUDE.deploy.md](./CLAUDE.deploy.md) para guía completa de deployment.
+
+## License
+
+MIT
+
+## Autor
+
+[@mks2508](https://github.com/mks2508)

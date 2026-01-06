@@ -22,7 +22,15 @@
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
-    "clean": "rm -rf node_modules apps/*/node_modules core/node_modules"
+    "clean": "rm -rf node_modules apps/*/node_modules core/node_modules packages/*/node_modules",
+    "setup": "bun run tools/index.ts setup",
+    "setup:staging": "bun run tools/index.ts setup --environment staging",
+    "setup:production": "bun run tools/index.ts setup --environment production",
+    "doctor": "bun run tools/index.ts doctor",
+    "build": "bun run typecheck && bun run lint",
+    "precommit": "bun run build && bun test",
+    "clean:logs": "rm -rf core/logs/* core/tmp/*.lock core/tmp/*.pid",
+    "clean:all": "bun run clean && rm -rf core/logs core/tmp"
   },
   "devDependencies": {
     "@types/bun": "latest",
