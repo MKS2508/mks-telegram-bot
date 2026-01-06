@@ -1,0 +1,28 @@
+{
+  "name": "mks-telegram-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "core",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @mks2508/telegram-bot-core dev",
+    "start": "bun run --filter @mks2508/telegram-bot-core start",
+    "typecheck": "tsgo",
+    "typecheck:core": "bun run --filter @mks2508/telegram-bot-core typecheck",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "rm -rf node_modules apps/*/node_modules core/node_modules"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "latest",
+    "oxlint": "latest",
+    "prettier": "^3.4.2",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,107 @@
+import type { Context, Telegraf } from 'telegraf'
+import { getConfig, hasLoggingConfigured } from '../config/index.js'
+import { streamLogger, botLogger } from '../middleware/logging.js'
+import { formatLogEntry } from '../utils/formatters.js'
+
+const LOG_BUFFER_SIZE = 10
+const LOG_BUFFER_TIMEOUT = 5000
+
+class LogStreamer {
+  private logBuffer: string[] = []
+  private bufferTimeout: NodeJS.Timeout | null = null
+  private isEnabled = false
+
+  constructor(private bot: Telegraf) {
+    this.isEnabled = hasLoggingConfigured()
+  }
+
+  async sendLog(level: string, component: string, message: string): Promise<void> {
+    if (!this.isEnabled) return
+
+    const timestamp = new Date().toISOString()
+    const formattedLog = formatLogEntry(timestamp, level, component, message)
+
+    this.logBuffer.push(formattedLog)
+
+    if (this.bufferTimeout) {
+      clearTimeout(this.bufferTimeout)
+    }
+
+    if (this.logBuffer.length >= LOG_BUFFER_SIZE) {
+      await this.flushBuffer()
+    } else {
+      this.bufferTimeout = setTimeout(() => {
+        this.flushBuffer()
+      }, LOG_BUFFER_TIMEOUT)
+    }
+  }
+
+  private async flushBuffer(): Promise<void> {
+    if (this.logBuffer.length === 0) return
+
+    const config = getConfig()
+    if (!config.logChatId) return
+
+    const fullMessage = this.logBuffer.join('\n\n')
+
+    try {
+      const extra = {
+        parse_mode: 'Markdown' as const,
+      }
+
+      if (config.logTopicId) {
+        Object.assign(extra, { message_thread_id: config.logTopicId })
+      }
+
+      await this.bot.telegram.sendMessage(config.logChatId, fullMessage, extra)
+    } catch (error) {
+      botLogger.error('Failed to send logs to Telegram:', error)
+    }
+
+    this.logBuffer = []
+    this.bufferTimeout = null
+  }
+
+  stop(): void {
+    if (this.bufferTimeout) {
+      clearTimeout(this.bufferTimeout)
+    }
+    this.flushBuffer()
+  }
+}
+
+let logStreamer: LogStreamer | null = null
+
+export function initializeLogStreamer(bot: Telegraf): void {
+  logStreamer = new LogStreamer(bot)
+  streamLogger.info('Log streamer initialized')
+}
+
+export async function sendLogToTelegram(
+  level: string,
+  component: string,
+  message: string
+): Promise<void> {
+  if (logStreamer) {
+    await logStreamer.sendLog(level, component, message)
+  }
+}
+
+export async function handleLogsCommand(ctx: Context): Promise<void> {
+  const config = getConfig()
+
+  if (!hasLoggingConfigured()) {
+    await ctx.reply('❌ Logging is not configured. Set TG_LOG_CHAT_ID environment variable.')
+    return
+  }
+
+  const isEnabled = logStreamer !== null
+  const status = isEnabled ? 'enabled' : 'disabled'
+
+  await ctx.reply(
+    `📝 *Log Streaming Status:* \`${status}\`\n\nChat ID: \`${config.logChatId}\`${
+      config.logTopicId ? `\nTopic ID: \`${config.logTopicId}\`` : ''
+    }`,
+    { parse_mode: 'Markdown' }
+  )
+}
