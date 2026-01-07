@@ -101,8 +101,7 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
 
   try {
     // Step 1: Initialize BootstrapClient
-    spinner.text = 'Initializing Telegram client...'
-    spinner.start()
+    cliLogger.info('Initializing Telegram client...')
 
     const client = new BootstrapClient({
       apiId: apiCredentials.apiId,
@@ -111,7 +110,7 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
 
     // Save API credentials to env if requested
     if (apiCredentials.saveToEnv) {
-      spinner.text = 'Saving API credentials to .env...'
+      cliLogger.info('Saving API credentials to .env...')
       const envContent = await readFile(envFile, 'utf-8')
       let updatedContent = envContent
 
@@ -120,7 +119,7 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
       updatedContent = updateEnvVar(updatedContent, 'TG_API_HASH', apiCredentials.apiHash)
 
       await writeFile(envFile, updatedContent, 'utf-8')
-      spinner.succeed('API credentials saved to .env')
+      cliLogger.success('API credentials saved to .env')
     }
 
     // Ensure authorized (may prompt for phone/code/2FA)
