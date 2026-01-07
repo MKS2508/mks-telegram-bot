@@ -22,6 +22,7 @@ export type {
   ConfiguredBot,
   MigrationResult,
 } from './env-manager.js'
+export { Environment } from '../../../core/src/config/env.js'
 
 export { BootstrapState } from './bootstrap-state.js'
 export type {

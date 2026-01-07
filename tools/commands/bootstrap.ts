@@ -11,6 +11,9 @@ import {
   BotFatherManager,
   GroupManager,
   TopicManager,
+  EnvManager,
+  BootstrapState,
+  Environment,
   type CreateSupergroupOptions,
 } from '../../packages/bootstrapper/src/index.js'
 
@@ -168,6 +171,10 @@ interface BootstrapOptions {
   groupName?: string
   skipTopics?: boolean
   auto?: boolean
+  bot?: string // Target specific bot
+  list?: boolean // List available bots
+  reuse?: boolean // Skip prompts, reuse if exists
+  force?: boolean // Force recreate
 }
 
 const command: BootstrapCommand = {
@@ -184,6 +191,10 @@ const command: BootstrapCommand = {
       .option('--group-name <value>', 'Group/forum title')
       .option('--skip-topics', 'Skip creating topics', false)
       .option('--auto', 'Use auto-generated names without confirmation', false)
+      .option('--bot <value>', 'Target specific bot')
+      .option('--list', 'List available bots from BotFather')
+      .option('--reuse', 'Reuse existing configuration without prompts')
+      .option('--force', 'Force recreate existing configuration')
       .action(async (options) => {
         await handleBootstrap(options)
       })
@@ -206,23 +217,58 @@ interface BootstrapResult {
 async function handleBootstrap(options: BootstrapOptions): Promise<void> {
   cliLogger.title('🚀 Complete Bot Bootstrap')
 
-  const environment = options.environment ?? 'local'
-  const envFile = resolve(process.cwd(), 'core', `.env.${environment}`)
+  const environment = (options.environment ?? 'local') as Environment
 
-  // Verify .env file exists
-  if (!existsSync(envFile)) {
-    cliLogger.error(`Environment file not found: ${envFile}`)
-    cliLogger.info('Please run "bun run setup" first to create the environment file.')
+  // Initialize EnvManager and BootstrapState
+  const envManager = new EnvManager()
+  const bootstrapState = new BootstrapState({ envManager })
+
+  // Handle --list flag: Show available bots from BotFather and exit
+  if (options.list) {
+    await handleListBots()
     return
   }
 
-  // Load env file to check for existing API credentials
-  const envContent = await readFile(envFile, 'utf-8')
-  const apiIdMatch = envContent.match(/^TG_API_ID=(.+)$/m)
-  const apiHashMatch = envContent.match(/^TG_API_HASH=(.+)$/m)
+  // Check for --bot flag: Target specific bot
+  let targetBotUsername = options.bot
+  if (targetBotUsername) {
+    if (!envManager.botExists(targetBotUsername)) {
+      cliLogger.error(`Bot '${targetBotUsername}' does not exist`)
+      return
+    }
+    cliLogger.info(`Targeting existing bot: ${chalk.cyan('@' + targetBotUsername)}`)
+  }
 
-  const envApiId = apiIdMatch?.[1]?.trim()
-  const envApiHash = apiHashMatch?.[1]?.trim()
+  // Get active bot or target bot
+  const activeBot = targetBotUsername || envManager.getActiveBot()
+  if (activeBot) {
+    cliLogger.info(`Active bot: ${chalk.cyan('@' + activeBot)}`)
+  }
+
+  const envFile = resolve(process.cwd(), 'core', `.env.${environment}`)
+
+  // Verify .env file exists (fallback to old structure)
+  const useOldEnvStructure = existsSync(envFile)
+  if (!activeBot && !useOldEnvStructure) {
+    cliLogger.error(`No active bot and environment file not found: ${envFile}`)
+    cliLogger.info('Please run "bun run bootstrap" without flags to create a new bot.')
+    return
+  }
+
+  // Load env file to check for existing API credentials (from old structure)
+  let envContent = ''
+  let envApiId: string | undefined
+  let envApiHash: string | undefined
+
+  if (useOldEnvStructure) {
+    envContent = await readFile(envFile, 'utf-8')
+    const apiIdMatch = envContent.match(/^TG_API_ID=(.+)$/m)
+    const apiHashMatch = envContent.match(/^TG_API_HASH=(.+)$/m)
+
+    envApiId = apiIdMatch?.[1]?.trim()
+    envApiHash = apiHashMatch?.[1]?.trim()
+  }
+
   const hasEnvCredentials = !!envApiId && !!envApiHash
 
   // Get API credentials (from env or prompt)
@@ -244,9 +290,9 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
     })
 
     // Save API credentials to env if requested
-    if (apiCredentials.saveToEnv) {
+    if (apiCredentials.saveToEnv && useOldEnvStructure) {
       cliLogger.info('Saving API credentials to .env...')
-      const envContent = await readFile(envFile, 'utf-8')
+      envContent = await readFile(envFile, 'utf-8')
       let updatedContent = envContent
 
       // Add or update API credentials
@@ -258,7 +304,6 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
     }
 
     // Ensure authorized (may prompt for phone/code/2FA)
-    // Note: This step is interactive and will show its own prompts
     const isAuthorized = await client.ensureAuthorized()
     if (!isAuthorized) {
       cliLogger.error('Authorization failed')
@@ -267,227 +312,252 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
 
     cliLogger.success('Connected to Telegram')
 
-    // Get bot info - generate random names if not provided
-    let botName: string
-    let botUsername: string
+    // ========================================
+    // PHASE 1: Bot Selection
+    // ========================================
 
-    if (options.botName || options.botUsername) {
-      // User provided names - use directly
-      botName = options.botName ?? await input({ message: 'Enter bot display name:' })
-      botUsername = options.botUsername ?? await input({
-        message: 'Enter bot username (must end in "bot"):',
-        validate: (value: string) => {
-          if (!value.endsWith('bot')) {
-            return 'Username must end with "bot"'
-          }
-          return true
-        },
-      })
-    } else if (options.auto) {
-      // AUTO MODE - generate without prompting
-      botUsername = generateRandomUsername()
-      botName = generateBotDisplayname(botUsername)
+    let botToken: string | undefined
+    let botUsername: string | undefined
+    let botName: string | undefined
 
-      cliLogger.info(`Auto-generated bot name: ${chalk.cyan(botName)}`)
-      cliLogger.info(`Auto-generated username: ${chalk.cyan('@' + botUsername)}`)
-    } else {
-      // INTERACTIVE MODE - generate and prompt for confirmation
-      botUsername = generateRandomUsername()
-      botName = generateBotDisplayname(botUsername)
+    // Initialize bootstrap session
+    bootstrapState.initialize({
+      environment,
+      apiId: apiCredentials.apiId,
+      apiHash: apiCredentials.apiHash,
+    })
 
-      cliLogger.info(`Generated bot name: ${chalk.cyan(botName)}`)
-      cliLogger.info(`Generated username: ${chalk.cyan('@' + botUsername)}`)
-      console.log('')
+    // Detect existing bot configuration
+    const existingBot = activeBot ? await loadExistingBotConfig(activeBot, environment, envManager) : null
 
-      const useGenerated = await confirm({
-        message: 'Use these auto-generated names?',
-        default: true,
-      })
-
-      if (!useGenerated) {
-        // User wants custom names
-        botName = await input({ message: 'Enter bot display name:' })
-        botUsername = await input({
-          message: 'Enter bot username (must end in "bot"):',
-          validate: (value: string) => {
-            if (!value.endsWith('bot')) {
-              return 'Username must end with "bot"'
-            }
-            return true
-          },
-        })
-      }
-    }
-
-    // Step 2: Create bot via BotFather
-    cliLogger.title('🤖 Step 1: Creating Bot')
-    spinner.text = 'Creating bot via @BotFather...'
-    spinner.start()
-
+    // Fetch available bots from BotFather
     const botFather = new BotFatherManager(client)
-    const botResult = await botFather.createBot({
-      botName,
-      botUsername: botUsername!,
-    })
+    const availableBots = await bootstrapState.fetchAvailableBots(client, botFather)
 
-    if (!botResult.success || !botResult.botToken) {
-      spinner.fail('Failed to create bot')
-      if (botResult.error) {
-        cliLogger.error(botResult.error)
+    // Handle --reuse flag: Skip prompts, reuse if exists
+    if (options.reuse && existingBot) {
+      cliLogger.info(`Reusing existing bot: @${existingBot.botUsername}`)
+      botToken = existingBot.botToken
+      botUsername = existingBot.botUsername
+    } else if (options.force) {
+      // --force flag: Skip prompts, create new bot
+      cliLogger.info('Force mode: Creating new bot...')
+      const newBotResult = await createNewBot(client, botFather, spinner)
+      if (!newBotResult.success) {
+        return
       }
+      botToken = newBotResult.botToken
+      botUsername = newBotResult.botUsername
+      botName = newBotResult.botName
+    } else {
+      // Interactive mode: Prompt user
+      const botSelection = await bootstrapState.promptBotSelection(availableBots, existingBot)
+
+      if (botSelection.action === 'cancel') {
+        cliLogger.info('Bootstrap cancelled')
+        return
+      }
+
+      if (botSelection.action === 'reuse') {
+        // Reuse existing bot
+        const reuseBotUsername = botSelection.botUsername || existingBot?.botUsername
+        if (!reuseBotUsername) {
+          cliLogger.error('No bot username selected')
+          return
+        }
+        botUsername = reuseBotUsername
+
+        // Try to load token from existing config or BotFather
+        const botInfo = availableBots.find(b => b.username === reuseBotUsername)
+        if (botInfo?.token) {
+          botToken = botInfo.token
+        } else if (existingBot?.botToken) {
+          botToken = existingBot.botToken
+        } else {
+          cliLogger.warn('Bot token not found in config, you may need to recreate the bot')
+        }
+        cliLogger.success(`Reusing bot: @${botUsername}`)
+      } else {
+        // Create new bot
+        const newBotResult = await createNewBot(client, botFather, spinner, options)
+        if (!newBotResult.success) {
+          return
+        }
+        botToken = newBotResult.botToken
+        botUsername = newBotResult.botUsername
+        botName = newBotResult.botName
+      }
+    }
+
+    if (!botToken || !botUsername) {
+      cliLogger.error('Failed to get bot token or username')
       return
     }
 
-    spinner.succeed(`Bot created: @${botResult.botUsername}`)
+    // ========================================
+    // PHASE 2: Group Selection
+    // ========================================
 
-    // Step 3: Create supergroup/forum - generate random name if not provided
-    let groupName: string
-    if (options.groupName) {
-      groupName = options.groupName
-    } else if (options.auto) {
-      groupName = generateGroupName(botName)
-      cliLogger.info(`Auto-generated group name: ${chalk.cyan(groupName)}`)
-    } else {
-      groupName = generateGroupName(botName)
-      cliLogger.info(`Generated group name: ${chalk.cyan(groupName)}`)
+    let chatId: number | undefined
+    let groupName: string | undefined
 
-      const useGeneratedGroup = await confirm({
-        message: `Use group name "${groupName}"?`,
-        default: true,
-      })
+    // Check for existing group in bot config
+    const existingGroup = existingBot?.controlChatId
+      ? { id: Number(existingBot.controlChatId), title: 'Existing Group', isForum: true }
+      : null
 
-      if (!useGeneratedGroup) {
-        groupName = await input({
-          message: 'Enter group/forum title:',
-          default: `${botName} Control`,
-        })
+    if (!existingGroup && !options.force) {
+      // Prompt for group selection
+      const groupManager = new GroupManager(client)
+      const existingGroups: import('../../packages/bootstrapper/src/bootstrap-state.js').GroupInfo[] = [] // TODO: Fetch existing groups from client
+      const groupSelection = await bootstrapState.promptGroupSelection(existingGroups)
+
+      if (groupSelection.action === 'skip') {
+        cliLogger.info('Skipping group creation')
+        chatId = undefined
+      } else if (groupSelection.action === 'reuse') {
+        chatId = groupSelection.chatId
+        groupName = groupSelection.groupInfo?.title
+        cliLogger.success(`Reusing group: ${groupName}`)
+      } else {
+        // Create new group
+        const newGroupResult = await createNewGroup(client, groupManager, spinner, botUsername, botName, options)
+        if (!newGroupResult.success) {
+          return
+        }
+        chatId = newGroupResult.chatId
+        groupName = newGroupResult.groupName
       }
+    } else if (existingGroup) {
+      cliLogger.info(`Reusing existing group: ${existingGroup.title}`)
+      chatId = existingGroup.id
+    } else if (options.force) {
+      // Force create group
+      const groupManager = new GroupManager(client)
+      const newGroupResult = await createNewGroup(client, groupManager, spinner, botUsername, botName, options)
+      if (!newGroupResult.success) {
+        return
+      }
+      chatId = newGroupResult.chatId
+      groupName = newGroupResult.groupName
     }
 
-    cliLogger.title('💬 Step 2: Creating Group/Forum')
-    spinner.text = 'Creating supergroup with forum mode...'
-    spinner.start()
+    // ========================================
+    // PHASE 3: Topics Selection
+    // ========================================
 
-    const groupManager = new GroupManager(client)
-    const groupResult = await groupManager.createSupergroup({
-      title: groupName,
-      forumMode: true,
-    })
-
-    if (!groupResult.success || !groupResult.chatId) {
-      spinner.fail('Failed to create group')
-      if (groupResult.error) {
-        cliLogger.error(groupResult.error)
-      }
-      return
-    }
-
-    spinner.succeed(`Group created: ${groupName} (ID: ${groupResult.chatId})`)
-
-    // Step 4: Add bot as admin
-    spinner.text = 'Adding bot as admin...'
-    spinner.start()
-
-    await sleep(2000) // Wait for group to be ready
-
-    const adminResult = await groupManager.addBotAsAdmin(
-      groupResult.chatId,
-      botResult.botUsername!,
-      {
-        canManageTopics: true,
-        canDeleteMessages: true,
-        canEditMessages: false,
-        canInviteUsers: true,
-      }
-    )
-
-    if (!adminResult.success) {
-      spinner.warn('Failed to add bot as admin (you may need to do this manually)')
-      cliLogger.warn(`Please add @${botResult.botUsername} as admin in the group`)
-    } else {
-      spinner.succeed('Bot added as admin')
-    }
-
-    // Step 5: Create topics
     const bootstrapResult: BootstrapResult = {
-      botToken: botResult.botToken,
-      botUsername: botResult.botUsername,
-      chatId: groupResult.chatId,
+      botToken,
+      botUsername,
+      chatId,
     }
 
-    if (!options.skipTopics) {
-      cliLogger.title('🧵 Step 3: Creating Topics')
+    if (chatId && !options.skipTopics) {
+      const existingTopics: import('../../packages/bootstrapper/src/bootstrap-state.js').TopicInfo[] = [] // TODO: Fetch existing topics from group
+      const topicsSelection = await bootstrapState.promptTopicsSelection(existingTopics)
 
-      const topicManager = new TopicManager(botResult.botToken)
-      const topicNames = ['General', 'Control', 'Logs', 'Config', 'Bugs']
+      if (topicsSelection.action === 'create') {
+        cliLogger.title('🧵 Step 3: Creating Topics')
 
-      spinner.text = 'Creating forum topics...'
-      spinner.start()
+        const topicManager = new TopicManager(botToken)
+        const topicNames = ['General', 'Control', 'Logs', 'Config', 'Bugs']
 
-      const topicResults = await topicManager.createTopics(groupResult.chatId, topicNames)
+        spinner.text = 'Creating forum topics...'
+        spinner.start()
 
-      spinner.succeed(`Created ${topicResults.length} topics`)
+        const topicResults = await topicManager.createTopics(chatId, topicNames)
 
-      for (const { name, result } of topicResults) {
-        if (result.success && result.threadId) {
-          console.log(`  ${chalk.cyan(name)}: ${chalk.yellow(String(result.threadId))}`)
+        spinner.succeed(`Created ${topicResults.length} topics`)
 
-          // Map topics to result
-          switch (name.toLowerCase()) {
-            case 'control':
-              bootstrapResult.controlTopicId = result.threadId
-              break
-            case 'logs':
-            case 'log':
-              bootstrapResult.logTopicId = result.threadId
-              break
-            case 'config':
-              bootstrapResult.configTopicId = result.threadId
-              break
-            case 'bugs':
-              bootstrapResult.bugsTopicId = result.threadId
-              break
-            case 'general':
-              bootstrapResult.generalTopicId = result.threadId
-              break
+        for (const { name, result } of topicResults) {
+          if (result.success && result.threadId) {
+            console.log(`  ${chalk.cyan(name)}: ${chalk.yellow(String(result.threadId))}`)
+
+            // Map topics to result
+            switch (name.toLowerCase()) {
+              case 'control':
+                bootstrapResult.controlTopicId = result.threadId
+                break
+              case 'logs':
+              case 'log':
+                bootstrapResult.logTopicId = result.threadId
+                break
+              case 'config':
+                bootstrapResult.configTopicId = result.threadId
+                break
+              case 'bugs':
+                bootstrapResult.bugsTopicId = result.threadId
+                break
+              case 'general':
+                bootstrapResult.generalTopicId = result.threadId
+                break
+            }
           }
         }
+      } else if (topicsSelection.action === 'reuse') {
+        cliLogger.info('Reusing existing topics')
       }
     }
 
-    // Step 6: Update .env file
+    // ========================================
+    // PHASE 4: Update Configuration
+    // ========================================
+
     cliLogger.title('🔧 Step 4: Updating Configuration')
-    spinner.text = 'Updating .env file...'
+    spinner.text = 'Updating bot configuration...'
     spinner.start()
 
-    await updateEnvFile(envFile, bootstrapResult)
+    // Update configuration using EnvManager
+    await envManager.updateEnv(botUsername, environment, {
+      botToken: bootstrapResult.botToken,
+      controlChatId: bootstrapResult.chatId ? String(bootstrapResult.chatId) : undefined,
+      controlTopicId: bootstrapResult.controlTopicId,
+      logChatId: bootstrapResult.chatId ? String(bootstrapResult.chatId) : undefined,
+      logTopicId: bootstrapResult.logTopicId,
+    })
 
-    spinner.succeed(`Updated ${envFile}`)
+    // Set as active bot if not already
+    const currentActive = envManager.getActiveBot()
+    if (currentActive !== botUsername) {
+      await envManager.setActiveBot(botUsername)
+    }
+
+    spinner.succeed(`Configuration saved for @${botUsername}`)
 
     // Summary
     cliLogger.title('✅ Bootstrap Complete')
     console.log('')
     console.log(chalk.bold('Bot Information:'))
-    console.log(`  Username: ${chalk.green('@' + bootstrapResult.botUsername)}`)
-    console.log(`  Token: ${chalk.yellow(bootstrapResult.botToken?.slice(0, 10) + '...')}`)
+    console.log(`  Username: ${chalk.green('@' + botUsername)}`)
+    console.log(`  Token: ${chalk.yellow(botToken.slice(0, 10) + '...')}`)
+    console.log(`  Environment: ${chalk.cyan(environment)}`)
     console.log('')
-    console.log(chalk.bold('Group Information:'))
-    console.log(`  Name: ${chalk.cyan(groupName)}`)
-    console.log(`  Chat ID: ${chalk.yellow(String(bootstrapResult.chatId))}`)
-    console.log('')
-    console.log(chalk.bold('Topic IDs:'))
-    if (bootstrapResult.generalTopicId) console.log(`  General: ${chalk.yellow(String(bootstrapResult.generalTopicId))}`)
-    if (bootstrapResult.controlTopicId) console.log(`  Control: ${chalk.yellow(String(bootstrapResult.controlTopicId))}`)
-    if (bootstrapResult.logTopicId) console.log(`  Logs: ${chalk.yellow(String(bootstrapResult.logTopicId))}`)
-    if (bootstrapResult.configTopicId) console.log(`  Config: ${chalk.yellow(String(bootstrapResult.configTopicId))}`)
-    if (bootstrapResult.bugsTopicId) console.log(`  Bugs: ${chalk.yellow(String(bootstrapResult.bugsTopicId))}`)
-    console.log('')
+
+    if (chatId) {
+      console.log(chalk.bold('Group Information:'))
+      console.log(`  Name: ${chalk.cyan(groupName || 'Unknown')}`)
+      console.log(`  Chat ID: ${chalk.yellow(String(chatId))}`)
+      console.log('')
+    }
+
+    if (bootstrapResult.controlTopicId || bootstrapResult.logTopicId) {
+      console.log(chalk.bold('Topic IDs:'))
+      if (bootstrapResult.generalTopicId) console.log(`  General: ${chalk.yellow(String(bootstrapResult.generalTopicId))}`)
+      if (bootstrapResult.controlTopicId) console.log(`  Control: ${chalk.yellow(String(bootstrapResult.controlTopicId))}`)
+      if (bootstrapResult.logTopicId) console.log(`  Logs: ${chalk.yellow(String(bootstrapResult.logTopicId))}`)
+      if (bootstrapResult.configTopicId) console.log(`  Config: ${chalk.yellow(String(bootstrapResult.configTopicId))}`)
+      if (bootstrapResult.bugsTopicId) console.log(`  Bugs: ${chalk.yellow(String(bootstrapResult.bugsTopicId))}`)
+      console.log('')
+    }
+
     cliLogger.success('Your bot is now ready to use!')
     console.log('')
+    cliLogger.info('Configuration saved to:')
+    console.log(`  ${chalk.cyan(`core/.envs/${botUsername}/${environment}.env`)}`)
+    console.log('')
     cliLogger.info('Next steps:')
-    console.log(`  ${chalk.dim('1.')} Review the configuration in ${chalk.cyan(`core/.env.${environment}`)}`)
-    console.log(`  ${chalk.dim('2.')} Run: ${chalk.cyan('bun run dev')}`)
-    console.log(`  ${chalk.dim('3.')} Send /start to your bot in Telegram`)
+    console.log(`  ${chalk.dim('1.')} Run: ${chalk.cyan('bun run dev')}`)
+    console.log(`  ${chalk.dim('2.')} Send /start to @${botUsername} in Telegram`)
     console.log('')
 
     // Cleanup
@@ -652,6 +722,295 @@ function updateEnvVar(content: string, key: string, value: string): string {
 
   // Add new variable at the end
   return content.trimEnd() + `\n${key}=${value}\n`
+}
+
+/**
+ * Handle --list flag: Show available bots from BotFather and exit
+ */
+async function handleListBots(): Promise<void> {
+  cliLogger.title('📋 Available Bots')
+
+  // Get API credentials
+  const apiId = await input({
+    message: 'Enter your API ID:',
+    validate: (value: string) => {
+      const num = parseInt(value, 10)
+      if (isNaN(num)) return 'API ID must be a number'
+      return true
+    },
+  })
+
+  const apiHash = await input({
+    message: 'Enter your API Hash:',
+    validate: (value: string) => {
+      if (!value || value.trim().length < 32) {
+        return 'API Hash seems too short (should be 32+ characters)'
+      }
+      return true
+    },
+  })
+
+  const spinner = ora({ color: 'cyan' })
+  spinner.text = 'Connecting to Telegram...'
+  spinner.start()
+
+  try {
+    const client = new BootstrapClient({
+      apiId: parseInt(apiId, 10),
+      apiHash: apiHash.trim(),
+    })
+
+    const isAuthorized = await client.ensureAuthorized()
+    if (!isAuthorized) {
+      spinner.fail('Authorization failed')
+      return
+    }
+
+    spinner.succeed('Connected to Telegram')
+
+    // Fetch available bots from BotFather
+    const botFather = new BotFatherManager(client)
+    spinner.text = 'Fetching bots from @BotFather...'
+    spinner.start()
+
+    const result = await botFather.listBots()
+
+    spinner.stop()
+
+    if (!result.success || !result.bots || result.bots.length === 0) {
+      cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
+      return
+    }
+
+    console.log('')
+    console.log(chalk.bold(`Found ${result.bots.length} bot(s):`))
+    console.log('')
+
+    for (const bot of result.bots) {
+      console.log(`  ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}`)
+    }
+
+    console.log('')
+    cliLogger.info('To use a specific bot, run: bun run bootstrap --bot <username>')
+    console.log('')
+
+    // Also show configured bots from EnvManager
+    const envManager = new EnvManager()
+    const configuredBots = envManager.listBots()
+
+    if (configuredBots.length > 0) {
+      console.log(chalk.bold('Configured in this project:'))
+      console.log('')
+
+      for (const bot of configuredBots) {
+        const activeMarker = bot.isActive ? chalk.green('✓ ') : '  '
+        const environments = []
+        if (bot.hasLocal) environments.push(chalk.cyan('local'))
+        if (bot.hasStaging) environments.push(chalk.yellow('staging'))
+        if (bot.hasProduction) environments.push(chalk.red('production'))
+
+        console.log(`  ${activeMarker}${chalk.green('@' + bot.username)}`)
+        console.log(`      Environments: ${environments.join(', ')}`)
+      }
+      console.log('')
+    }
+
+    await client.disconnect()
+  } catch (error) {
+    spinner.stop()
+    cliLogger.error('Failed to fetch bots')
+    if (error instanceof Error) {
+      console.error(chalk.dim(`  ${error.message}`))
+    }
+  }
+}
+
+/**
+ * Load existing bot configuration from EnvManager
+ */
+async function loadExistingBotConfig(
+  botUsername: string,
+  environment: Environment,
+  envManager: EnvManager
+): Promise<{ botUsername: string; botToken: string; environment: Environment; controlChatId?: string; controlTopicId?: number; logChatId?: string; logTopicId?: number } | null> {
+  try {
+    const config = await envManager.readEnv(botUsername, environment)
+    if (!config.botToken) {
+      return null
+    }
+
+    return {
+      botUsername,
+      botToken: config.botToken,
+      environment,
+      controlChatId: config.controlChatId,
+      controlTopicId: config.controlTopicId,
+      logChatId: config.logChatId,
+      logTopicId: config.logTopicId,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Create a new bot with prompts
+ */
+async function createNewBot(
+  client: BootstrapClient,
+  botFather: BotFatherManager,
+  spinner: any,
+  options?: BootstrapOptions
+): Promise<{ success: true; botToken: string; botUsername: string; botName: string } | { success: false; error?: string }> {
+  let botName: string
+  let botUsername: string
+
+  if (options?.botName || options?.botUsername) {
+    botName = options.botName ?? await input({ message: 'Enter bot display name:' })
+    botUsername = options.botUsername ?? await input({
+      message: 'Enter bot username (must end in "bot"):',
+      validate: (value: string) => {
+        if (!value.endsWith('bot')) {
+          return 'Username must end with "bot"'
+        }
+        return true
+      },
+    })
+  } else if (options?.auto) {
+    botUsername = generateRandomUsername()
+    botName = generateBotDisplayname(botUsername)
+    cliLogger.info(`Auto-generated bot name: ${chalk.cyan(botName)}`)
+    cliLogger.info(`Auto-generated username: ${chalk.cyan('@' + botUsername)}`)
+  } else {
+    botUsername = generateRandomUsername()
+    botName = generateBotDisplayname(botUsername)
+
+    cliLogger.info(`Generated bot name: ${chalk.cyan(botName)}`)
+    cliLogger.info(`Generated username: ${chalk.cyan('@' + botUsername)}`)
+    console.log('')
+
+    const useGenerated = await confirm({
+      message: 'Use these auto-generated names?',
+      default: true,
+    })
+
+    if (!useGenerated) {
+      botName = await input({ message: 'Enter bot display name:' })
+      botUsername = await input({
+        message: 'Enter bot username (must end in "bot"):',
+        validate: (value: string) => {
+          if (!value.endsWith('bot')) {
+            return 'Username must end with "bot"'
+          }
+          return true
+        },
+      })
+    }
+  }
+
+  cliLogger.title('🤖 Step 1: Creating Bot')
+  spinner.text = 'Creating bot via @BotFather...'
+  spinner.start()
+
+  const botResult = await botFather.createBot({
+    botName,
+    botUsername: botUsername!,
+  })
+
+  if (!botResult.success || !botResult.botToken) {
+    spinner.fail('Failed to create bot')
+    return { success: false, error: botResult.error }
+  }
+
+  spinner.succeed(`Bot created: @${botResult.botUsername}`)
+  return {
+    success: true,
+    botToken: botResult.botToken,
+    botUsername: botResult.botUsername!,
+    botName,
+  }
+}
+
+/**
+ * Create a new group with prompts
+ */
+async function createNewGroup(
+  client: BootstrapClient,
+  groupManager: GroupManager,
+  spinner: any,
+  botUsername: string | undefined,
+  botName: string | undefined,
+  options?: BootstrapOptions
+): Promise<{ success: true; chatId: number; groupName: string } | { success: false; error?: string }> {
+  let groupName: string
+
+  if (options?.groupName) {
+    groupName = options.groupName
+  } else if (options?.auto) {
+    groupName = generateGroupName(botName || 'My Bot')
+    cliLogger.info(`Auto-generated group name: ${chalk.cyan(groupName)}`)
+  } else {
+    groupName = generateGroupName(botName || 'My Bot')
+    cliLogger.info(`Generated group name: ${chalk.cyan(groupName)}`)
+
+    const useGeneratedGroup = await confirm({
+      message: `Use group name "${groupName}"?`,
+      default: true,
+    })
+
+    if (!useGeneratedGroup) {
+      groupName = await input({
+        message: 'Enter group/forum title:',
+        default: `${botName || 'My Bot'} Control`,
+      })
+    }
+  }
+
+  cliLogger.title('💬 Step 2: Creating Group/Forum')
+  spinner.text = 'Creating supergroup with forum mode...'
+  spinner.start()
+
+  const groupResult = await groupManager.createSupergroup({
+    title: groupName,
+    forumMode: true,
+  })
+
+  if (!groupResult.success || !groupResult.chatId) {
+    spinner.fail('Failed to create group')
+    return { success: false, error: groupResult.error }
+  }
+
+  spinner.succeed(`Group created: ${groupName} (ID: ${groupResult.chatId})`)
+
+  // Add bot as admin
+  spinner.text = 'Adding bot as admin...'
+  spinner.start()
+
+  await sleep(2000)
+
+  const adminResult = await groupManager.addBotAsAdmin(
+    groupResult.chatId,
+    botUsername!,
+    {
+      canManageTopics: true,
+      canDeleteMessages: true,
+      canEditMessages: false,
+      canInviteUsers: true,
+    }
+  )
+
+  if (!adminResult.success) {
+    spinner.warn('Failed to add bot as admin (you may need to do this manually)')
+    cliLogger.warn(`Please add @${botUsername} as admin in the group`)
+  } else {
+    spinner.succeed('Bot added as admin')
+  }
+
+  return {
+    success: true,
+    chatId: groupResult.chatId,
+    groupName,
+  }
 }
 
 /**
