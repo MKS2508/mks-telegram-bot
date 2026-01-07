@@ -603,6 +603,312 @@ export class BotFatherManager {
   }
 
   /**
+   * Check if message has a pagination button with specific text
+   */
+  private hasPaginationButton(message: Message, buttonText: string): boolean {
+    return this.findPaginationButtonData(message, buttonText) !== null
+  }
+
+  /**
+   * Find pagination button data by text
+   */
+  private findPaginationButtonData(message: Message, buttonText: string): string | null {
+    try {
+      // @ts-ignore
+      const msg = message.message
+      if (!msg?.replyMarkup?.rows) return null
+
+      for (const row of msg.replyMarkup.rows) {
+        // @ts-ignore
+        if (!row.buttons) continue
+
+        // @ts-ignore
+        for (const button of row.buttons) {
+          // @ts-ignore
+          if (button.text === buttonText) {
+            // @ts-ignore - return the button data for clicking
+            return button.data
+          }
+        }
+      }
+    } catch (error) {
+      console.log('[DEBUG] Error finding pagination button:', error)
+    }
+    return null
+  }
+
+  /**
+   * Click on an inline keyboard button
+   */
+  private async clickInlineButton(message: Message, buttonData: string): Promise<boolean> {
+    try {
+      // @ts-ignore
+      const msg = message.message
+      if (!msg?.id) {
+        console.log('[DEBUG] No message ID for clicking button')
+        return false
+      }
+
+      // Get BotFather peer
+      // @ts-ignore
+      const botFatherPeer = await this.client.getEntity(this.botFatherUsername)
+
+      // Click button using getBotCallbackAnswer
+      // @ts-ignore
+      const result = await this.client.invoke({
+        '@type': 'messages.getBotCallbackAnswer',
+        peer: botFatherPeer,
+        msgId: msg.id,
+        data: buttonData,
+      })
+
+      console.log(`[DEBUG] Clicked button with data: ${buttonData.slice(0, 20)}...`)
+      return true
+    } catch (error) {
+      console.log('[DEBUG] Error clicking button:', error)
+      return false
+    }
+  }
+
+  /**
+   * List ALL bots with pagination support
+   */
+  async listAllBots(): Promise<BotListResult> {
+    try {
+      this.setupMessageListener()
+
+      const allBots: BotInfo[] = []
+      let currentPage = 1
+      let hasNextPage = true
+      let lastMessage: Message | null = null
+
+      while (hasNextPage) {
+        // Send /mybots if first page
+        if (currentPage === 1) {
+          await this.sendMessageToBotFather('/mybots')
+          await this.sleep(2000)
+        }
+
+        // Get current page response
+        const response = await this.waitForResponse(10000)
+        if (!response) {
+          console.log('[DEBUG] No response for page', currentPage)
+          break
+        }
+
+        lastMessage = response
+
+        // Extract bots from this page
+        const pageBots = this.parseBotsFromInlineKeyboard(response)
+
+        // Deduplicate within this page
+        const seen = new Set<string>()
+        const uniquePageBots = pageBots.filter((bot) => {
+          if (seen.has(bot.username)) return false
+          seen.add(bot.username)
+          return true
+        })
+
+        allBots.push(...uniquePageBots)
+        console.log(`[DEBUG] Page ${currentPage}: Found ${uniquePageBots.length} bots (total: ${allBots.length})`)
+
+        // Look for "Next" button
+        const nextButtonData = this.findPaginationButtonData(response, 'Next')
+
+        if (nextButtonData) {
+          // Click "Next" button
+          console.log('[DEBUG] Clicking Next button...')
+          const clicked = await this.clickInlineButton(response, nextButtonData)
+          if (!clicked) {
+            console.log('[DEBUG] Failed to click Next button')
+            break
+          }
+          await this.sleep(2000)
+          currentPage++
+        } else {
+          // No Next button - we're done
+          console.log('[DEBUG] No Next button found, reached last page')
+          hasNextPage = false
+        }
+
+        // Safety limit to prevent infinite loops
+        if (currentPage > 50) {
+          console.log('[DEBUG] Reached page limit (50)')
+          break
+        }
+      }
+
+      this.removeMessageListener()
+
+      // Remove duplicates across all pages
+      const globalSeen = new Set<string>()
+      const uniqueBots = allBots.filter((bot) => {
+        if (globalSeen.has(bot.username)) return false
+        globalSeen.add(bot.username)
+        return true
+      })
+
+      console.log(`[DEBUG] Total unique bots across all pages: ${uniqueBots.length}`)
+
+      return { success: true, bots: uniqueBots }
+    } catch (error) {
+      this.removeMessageListener()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Get bot token by clicking on bot button
+   */
+  async getBotToken(botUsername: string): Promise<{ success: boolean; token?: string }> {
+    try {
+      this.setupMessageListener()
+      await this.sleep(500)
+
+      // Send /mybots
+      await this.sendMessageToBotFather('/mybots')
+      await this.sleep(2000)
+
+      // Wait for list response
+      const listResponse = await this.waitForResponse(10000)
+      if (!listResponse) {
+        this.removeMessageListener()
+        return { success: false }
+      }
+
+      // Find and click the bot button
+      const buttonData = this.findBotButtonData(listResponse, botUsername)
+      if (!buttonData) {
+        console.log(`[DEBUG] Bot button not found for @${botUsername}`)
+        this.removeMessageListener()
+        return { success: false }
+      }
+
+      // Click bot button
+      console.log(`[DEBUG] Clicking bot button for @${botUsername}...`)
+      const clicked = await this.clickInlineButton(listResponse, buttonData)
+      if (!clicked) {
+        this.removeMessageListener()
+        return { success: false }
+      }
+
+      await this.sleep(2000)
+
+      // Wait for token response
+      const tokenResponse = await this.waitForResponse(10000)
+      if (!tokenResponse) {
+        this.removeMessageListener()
+        return { success: false }
+      }
+
+      const responseText = this.extractMessageText(tokenResponse)
+      console.log(`[DEBUG] Token response for @${botUsername}: "${responseText.slice(0, 100)}..."`)
+
+      // Parse token from response
+      const tokenMatch = responseText.match(/(\d+:[A-Za-z0-9_-]{35,})/)
+      if (tokenMatch) {
+        this.removeMessageListener()
+        return { success: true, token: tokenMatch[1] }
+      }
+
+      this.removeMessageListener()
+      return { success: false }
+    } catch (error) {
+      this.removeMessageListener()
+      console.log('[DEBUG] Error getting bot token:', error)
+      return { success: false }
+    }
+  }
+
+  /**
+   * Find bot button data by username
+   */
+  private findBotButtonData(message: Message, botUsername: string): string | null {
+    const cleanUsername = botUsername.startsWith('@') ? botUsername.slice(1) : botUsername
+
+    try {
+      // @ts-ignore
+      const msg = message.message
+      if (!msg?.replyMarkup?.rows) return null
+
+      for (const row of msg.replyMarkup.rows) {
+        // @ts-ignore
+        if (!row.buttons) continue
+
+        // @ts-ignore
+        for (const button of row.buttons) {
+          // @ts-ignore
+          const buttonText = button.text
+
+          // Check if button contains this bot's username
+          if (buttonText.includes(cleanUsername) || buttonText.includes(`@${cleanUsername}`)) {
+            // @ts-ignore
+            console.log(`[DEBUG] Found bot button: ${buttonText}`)
+            // @ts-ignore
+            return button.data
+          }
+        }
+      }
+    } catch (error) {
+      console.log('[DEBUG] Error finding bot button:', error)
+    }
+    return null
+  }
+
+  /**
+   * Get all bots with their tokens
+   */
+  async getAllBotsWithTokens(): Promise<Array<BotInfo & { token: string }>> {
+    const botsWithTokens: Array<BotInfo & { token: string }> = []
+
+    try {
+      // First get all bots (with pagination)
+      const listResult = await this.listAllBots()
+      if (!listResult.success || !listResult.bots) {
+        return []
+      }
+
+      console.log(`[DEBUG] Fetching tokens for ${listResult.bots.length} bots...`)
+
+      // For each bot, click to get the token
+      for (let i = 0; i < listResult.bots.length; i++) {
+        const bot = listResult.bots[i]
+        if (!bot) continue
+
+        console.log(`[DEBUG] [${i + 1}/${listResult.bots.length}] Fetching token for @${bot.username}...`)
+
+        const tokenResult = await this.getBotToken(bot.username)
+        if (tokenResult.success && tokenResult.token) {
+          botsWithTokens.push({
+            username: bot.username,
+            name: bot.name || bot.username,
+            token: tokenResult.token,
+            description: bot.description,
+            about: bot.about,
+          })
+          console.log(`[DEBUG] ✓ Got token for @${bot.username}`)
+        } else {
+          console.log(`[DEBUG] ✗ Failed to get token for @${bot.username}`)
+        }
+
+        // Small delay between requests to avoid rate limiting
+        if (i < listResult.bots.length - 1) {
+          await this.sleep(1000)
+        }
+      }
+
+      console.log(`[DEBUG] Successfully fetched ${botsWithTokens.length}/${listResult.bots.length} bot tokens`)
+    } catch (error) {
+      console.log('[DEBUG] Error in getAllBotsWithTokens:', error)
+    }
+
+    return botsWithTokens
+  }
+
+  /**
    * Parse bot list from BotFather response
    * @param responseText The text response from BotFather
    * @returns Array of bot information
