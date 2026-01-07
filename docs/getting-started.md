@@ -65,7 +65,33 @@ Esto instala todas las dependencias del workspace:
 
 ## Paso 4: Configurar el Entorno
 
-### Opción Recomendada: Setup Interactivo
+### 🌟 Opción Recomendada: Bootstrap Multibot
+
+El template ahora soporta **múltiples bots** desde un mismo proyecto. Usa el comando `bootstrap` para configurar todo automáticamente:
+
+```bash
+# Bootstrap interactivo completo (recomendado)
+bun run bootstrap
+
+# Listar bots disponibles desde BotFather
+bun run bootstrap --list
+
+# Usar bot específico
+bun run bootstrap --bot mybot123bot
+
+# Reutilizar configuración existente sin prompts
+bun run bootstrap --reuse
+```
+
+El bootstrap te guiará paso a paso:
+
+1. **Credenciales API** (si no las tienes): Tu API ID y Hash de https://my.telegram.org
+2. **Bot Selection**: Crear nuevo bot o reutilizar uno existente
+3. **Group Selection**: Crear nuevo grupo/forum o reutilizar existente
+4. **Topics Selection**: Crear topics para organización (Control, Logs, Config, Bugs)
+5. **Listo!**: Tu bot está configurado y listo para usar
+
+### Opción Manual: Setup Interactivo
 
 ```bash
 bun run setup
@@ -79,23 +105,79 @@ El comando te preguntará:
 4. **Streaming de logs** - Opcional, para ver logs en Telegram
 5. **Comandos de control** - Opcional, para comandos admin
 
-### Opción Manual: Editar Archivo .env
+### Opción Manual Avanzada: Editar Archivo .env
+
+> **NOTA**: El sistema ahora usa la estructura `.envs/{bot}/{environment}.env` para multibot.
 
 ```bash
-cp core/.env.example core/.env.local
-nano core/.env.local
-```
+# Crear directorio para tu bot
+mkdir -p core/.envs/mybot123bot
 
-Edita las variables mínimas:
-
-```bash
+# Crear archivo de entorno local
+cat > core/.envs/mybot123bot/local.env << 'EOF'
 # Required
 TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 TG_MODE=polling
 TG_ENV=local
+EOF
 ```
 
-### Opción Automática: Bootstrap Completo
+### Sistema Multibot
+
+El template soporta gestión de **múltiples bots** desde un mismo proyecto:
+
+#### Estructura de Directorios
+
+```
+core/.envs/
+├── mybot123bot/
+│   ├── local.env       # Configuración local
+│   ├── staging.env     # Configuración staging
+│   ├── production.env  # Configuración production
+│   └── metadata.json   # Metadatos del bot
+├── anotherbot456bot/
+│   ├── local.env
+│   ├── staging.env
+│   └── production.env
+└── .active -> mybot123bot  # Symlink al bot activo
+```
+
+#### Comandos de Gestión de Bots
+
+```bash
+# Listar todos los bots configurados
+bun run bot list
+
+# Establecer bot activo
+bun run bot use mybot123bot
+
+# Ver información detallada de un bot
+bun run bot info mybot123bot
+
+# Eliminar configuración de un bot
+bun run bot delete mybot123bot
+
+# Migrar .envs antiguos a nueva estructura
+bun run bot migrate
+```
+
+#### Selección de Bot Activo
+
+Hay tres formas de seleccionar el bot activo:
+
+1. **Vía symlink .active** (automático con `bot use`):
+```bash
+bun run bot use mybot123bot
+```
+
+2. **Vía variable de entorno**:
+```bash
+TG_BOT=mybot123bot bun run dev
+```
+
+3. **Automático**: El bot configurado más recientemente se activa automáticamente
+
+### Opción Automática: Bootstrap Completo (Método Anterior)
 
 > **"BotFather Personal"** - Automatiza TODO el proceso de creación
 

@@ -27,6 +27,7 @@
     "setup:staging": "bun run tools/index.ts setup --environment staging",
     "setup:production": "bun run tools/index.ts setup --environment production",
     "bootstrap": "bun run tools/index.ts bootstrap",
+    "bot": "bun run tools/index.ts bot",
     "doctor": "bun run tools/index.ts doctor",
     "build": "bun run typecheck && bun run lint",
     "precommit": "bun run build && bun test",

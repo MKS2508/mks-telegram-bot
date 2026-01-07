@@ -405,6 +405,8 @@ bun run ngrok --environment production --webhook-url
 
 Crea automáticamente un bot, grupo y topics mediante interacción con @BotFather.
 
+> **Versión Multibot**: El bootstrapper ahora soporta gestión de múltiples bots con detección de existentes y reutilización.
+
 > **Este es un "BotFather personal"** - automatiza todo el proceso de creación de bots.
 
 ### Uso
@@ -418,16 +420,26 @@ bun run bootstrap
 | Flag | Descripción | Default |
 | ---- | ----------- | ------- |
 | `-e, --environment <local\|staging\|production>` | Entorno objetivo | `local` |
+| `--bot <username>` | Bot username específico (sin @) | Prompt interactivo |
+| `--list` | Listar bots disponibles desde BotFather | `false` |
+| `--reuse` | Reutilizar configuración existente sin prompts | `false` |
+| `--force` | Forzar recreación de recursos | `false` |
+| `--skip-topics` | Skip creación de topics | `false` |
 | `--bot-name <value>` | Nombre del bot (display name) | Prompt interactivo |
 | `--bot-username <value>` | Username del bot (debe terminar en "bot") | Prompt interactivo |
 | `--group-name <value>` | Nombre del grupo/forum | Prompt interactivo |
-| `--skip-topics` | Skip creación de topics | `false` |
 
 ### Ejemplos
 
 ```bash
-# Bootstrap interactivo completo
+# Bootstrap interactivo completo (recomendado)
 bun run bootstrap
+
+# Listar bots disponibles desde BotFather
+bun run bootstrap --list
+
+# Bootstrap para bot específico
+bun run bootstrap --bot mybot123bot
 
 # Bootstrap con nombres pre-proveídos
 bun run bootstrap --bot-name "Mi Bot" --bot-username "mi_bot_v1" --group-name "Control Group"
@@ -435,8 +447,14 @@ bun run bootstrap --bot-name "Mi Bot" --bot-username "mi_bot_v1" --group-name "C
 # Bootstrap para staging
 bun run bootstrap --environment staging
 
+# Reutilizar configuración existente sin prompts
+bun run bootstrap --reuse
+
 # Bootstrap sin crear topics
 bun run bootstrap --skip-topics
+
+# Forzar recreación de recursos
+bun run bootstrap --force
 ```
 
 ### Requisitos Previos
@@ -698,6 +716,168 @@ bun run bootstrap
 - **El bot token** se guarda en el `.env` del entorno correspondiente
 
 > **IMPORTANTE**: Nunca commits los archivos `.env.*` ni la sesión.
+
+## Bot Management Commands
+
+Comandos para gestionar múltiples configuraciones de bots en el mismo proyecto.
+
+> **Sistema Multibot**: Gestiona múltiples bots desde un mismo proyecto con configuraciones independientes.
+
+### `bot list`
+
+Lista todos los bots configurados en el proyecto.
+
+```bash
+bun run bot list
+```
+
+#### Output
+
+```
+📋 Configured Bots
+
+Found 2 configured bot(s):
+
+  ✓ @mybot123bot
+      Environments: local, staging, production
+      Name: My Bot
+      Created: 01/07/2025
+
+  @anotherbot456bot
+      Environments: local
+      Name: Another Bot
+      Created: 01/05/2025
+
+✓ Active bot: @mybot123bot
+```
+
+### `bot use <username>`
+
+Establece un bot como activo.
+
+```bash
+bun run bot use mybot123bot
+```
+
+#### Qué Hace
+
+- Actualiza el symlink `.active` para apuntar al bot seleccionado
+- Todos los comandos subsecuentes (`bun run dev`, `bun run start`) usarán este bot
+
+#### Output
+
+```
+✓ @mybot123bot is now the active bot
+```
+
+### `bot info <username>`
+
+Muestra información detallada de un bot específico.
+
+```bash
+bun run bot info mybot123bot
+```
+
+#### Output
+
+```
+ℹ️ Bot Information: @mybot123bot
+
+Basic Information:
+  Username: @mybot123bot
+  Active: Yes
+
+Environments:
+  Local: ✓
+  Staging: ✓
+  Production: ✓
+
+Metadata:
+  Name: My Bot
+  Created: 1/7/2025, 2:30:45 PM
+  Updated: 1/7/2025, 3:15:22 PM
+  Description: My awesome Telegram bot
+  Tags: test, demo
+
+LOCAL Configuration:
+  Token: 123456:ABC...
+  Control Chat ID: -1001234567890
+  Control Topic ID: 2
+  Log Chat ID: -1001234567890
+  Log Topic ID: 3
+
+STAGING Configuration:
+  Token: 789012:DEF...
+  Control Chat ID: -1009876543210
+  Control Topic ID: 5
+```
+
+### `bot delete <username>`
+
+Elimina la configuración de un bot.
+
+```bash
+bun run bot delete mybot123bot
+
+# Skip confirmación
+bun run bot delete mybot123bot --force
+```
+
+#### Flags
+
+| Flag | Descripción |
+| ---- | ----------- |
+| `-f, --force` | Skip confirmación prompt |
+
+#### Qué Hace
+
+- Elimina el directorio `.envs/{bot}/` completo
+- Si el bot estaba activo, limpia el symlink `.active`
+- Pide confirmación unless `--force`
+
+#### Output
+
+```
+⠋ Deleting bot '@mybot123bot'...
+✓ Bot '@mybot123bot' deleted
+ℹ Active bot cleared. Use "bun run bot use <username>" to set a new active bot.
+```
+
+### `bot migrate`
+
+Migra archivos `.env.{env}` antiguos a la nueva estructura `.envs/{bot}/{env}.env`.
+
+```bash
+bun run bot migrate
+```
+
+#### Qué Hace
+
+- Detecta archivos `.env.local`, `.env.staging`, `.env.production` en `core/`
+- Extrae el bot token para determinar el bot username
+- Crea la nueva estructura `.envs/{bot}/{env}.env`
+- Mueve las variables de entorno a los nuevos archivos
+- Crea `metadata.json` con información del bot
+- Actualiza el symlink `.active`
+- Hace backup de archivos antiguos como `.env.{env}.backup`
+
+#### Output
+
+```
+🔄 Migrate Old .env Files
+
+This command will migrate old .env.{environment} files
+to the new .envs/{bot}/{environment}.env structure.
+Old files will be backed up as .env.{environment}.backup
+
+? Do you want to proceed with migration? (Y/n)
+
+⠋ Migrating .env files...
+✓ Migration completed successfully
+
+Migrated bots:
+  @mybot123bot
+```
 
 ## Referencias
 

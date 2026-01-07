@@ -6,11 +6,67 @@ Guía completa de configuración de variables de entorno para el bot.
 
 El template soporta múltiples entornos con archivos `.env` separados:
 
+### Estructura Multibot (Nueva)
+
+> **Sistema Multibot**: Gestiona múltiples bots desde un mismo proyecto con configuraciones independientes.
+
+El template ahora usa una estructura `.envs/` para soportar múltiples bots:
+
+```
+core/.envs/
+├── {botUsername}/
+│   ├── local.env       # Configuración local del bot
+│   ├── staging.env     # Configuración staging del bot
+│   ├── production.env  # Configuración production del bot
+│   └── metadata.json   # Metadatos del bot
+└── .active -> {botUsername}  # Symlink al bot activo
+```
+
+### Estructura Legada (Antigua)
+
+Para backwards compatibility, el template todavía soporta la estructura antigua:
+
 | Archivo | Uso | Modo | Bot Token |
 | ------- | --- | ---- | --------- |
 | `core/.env.local` | Desarrollo local | Polling | Local dev token |
 | `core/.env.staging` | Testing/Staging | Webhook | Test bot token |
 | `core/.env.production` | Producción | Webhook | Real bot token |
+
+### Selección de Bot Activo
+
+En la estructura multibot, hay tres formas de seleccionar el bot activo:
+
+#### 1. Vía Symlink .active (Automático)
+
+```bash
+bun run bot use mybot123bot
+```
+
+Esto crea/actualiza el symlink `.active` para apuntar al bot seleccionado.
+
+#### 2. Vía Variable de Entorno TG_BOT
+
+```bash
+TG_BOT=mybot123bot bun run dev
+```
+
+#### 3. Automático
+
+El bot configurado más recientemente se activa automáticamente.
+
+### Migración desde Estructura Antigua
+
+Si tienes archivos `.env.{env}` antiguos, puedes migrarlos a la nueva estructura:
+
+```bash
+bun run bot migrate
+```
+
+Este comando:
+- Detecta archivos `.env.local`, `.env.staging`, `.env.production`
+- Crea la estructura `.envs/{bot}/{env}.env`
+- Hace backup de archivos antiguos como `.env.{env}.backup`
+- Actualiza el symlink `.active`
 
 ### Selección de Entorno
 
@@ -143,6 +199,30 @@ TG_WEBHOOK_SECRET=my_secret_token_min_16_chars
 ```
 
 ## Variables de Identificación
+
+### `TG_BOT`
+
+**Descripción**: Username del bot a activar (sistema multibot)
+
+**Formato**: Bot username sin el `@`
+
+**Ejemplo**:
+```bash
+TG_BOT=mybot123bot
+```
+
+**Uso**:
+```bash
+# Arrancar bot específico
+TG_BOT=mybot123bot bun run dev
+
+# Arrancar otro bot
+TG_BOT=anotherbot456bot bun run dev
+```
+
+**Alternativas**:
+- Usar `bun run bot use <username>` para establecer bot activo permanentemente
+- El symlink `.active` se usa automáticamente si `TG_BOT` no está seteado
 
 ### `TG_ENV`
 
@@ -420,7 +500,7 @@ TG_MAX_RETRIES=5
 
 ### Nunca Commitear .env Files
 
-Los archivos `.env.*` contienen secrets y no deben estar en git.
+Los archivos `.env.*` y el directorio `.envs/` contienen secrets y no deben estar en git.
 
 ```gitignore
 # En .gitignore
@@ -428,6 +508,11 @@ core/.env.local
 core/.env.staging
 core/.env.production
 core/.env.*
+
+# Multibot environment directory
+core/.envs/
+core/.envs/*/
+!core/.envs/.gitkeep
 ```
 
 ### Usar .env.example
@@ -461,7 +546,50 @@ kubectl create secret generic bot-secrets --from-literal=TG_BOT_TOKEN=xxx
 
 ## Plantillas de Entorno
 
-### Desarrollo (.env.local)
+### Estructura Multibot
+
+Para sistemas multibot, cada bot tiene su propio directorio con archivos de entorno:
+
+```bash
+# core/.envs/mybot123bot/local.env
+TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+TG_MODE=polling
+TG_ENV=local
+LOG_LEVEL=debug
+TG_DEBUG=true
+
+# core/.envs/mybot123bot/staging.env
+TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+TG_MODE=webhook
+TG_WEBHOOK_URL=https://staging.example.com/webhook
+TG_WEBHOOK_SECRET=staging_secret_min_16_chars
+TG_ENV=staging
+LOG_LEVEL=info
+
+# core/.envs/mybot123bot/production.env
+TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+TG_MODE=webhook
+TG_WEBHOOK_URL=https://bot.example.com/webhook
+TG_WEBHOOK_SECRET=super_secure_secret_min_16_chars
+TG_ENV=production
+LOG_LEVEL=warn
+TG_RATE_LIMIT=30
+
+# core/.envs/mybot123bot/metadata.json
+{
+  "name": "My Bot",
+  "description": "My awesome Telegram bot",
+  "createdAt": "2025-01-07T14:30:45.000Z",
+  "updatedAt": "2025-01-07T15:15:22.000Z",
+  "tags": ["test", "demo"]
+}
+```
+
+### Estructura Legada (Archivos Únicos)
+
+Para proyectos con un solo bot, puedes usar archivos de entorno únicos:
+
+#### Desarrollo (.env.local)
 
 ```bash
 # Required
@@ -478,7 +606,7 @@ LOG_LEVEL=debug
 TG_DEBUG=true
 ```
 
-### Staging (.env.staging)
+#### Staging (.env.staging)
 
 ```bash
 # Required
