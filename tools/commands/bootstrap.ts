@@ -14,6 +14,139 @@ import {
   type CreateSupergroupOptions,
 } from '../../packages/bootstrapper/src/index.js'
 
+// 🎭 Generador de nombres temáticos
+const THEME_GENERATORS = {
+  // Prefixes de hacking/cyberpunk
+  prefixes: [
+    'Cyber', 'Dark', 'Ghost', 'Shadow', 'Crypto', 'Stealth', 'Hack', 'Zero',
+    'Null', 'Void', 'Root', 'Shell', 'Code', 'Bit', 'Byte', 'Pixel', 'Glitch',
+    'Matrix', 'Neural', 'Quantum', 'Digital', 'Binary', 'Hex', 'Octal',
+    'Phantom', 'Specter', 'Wraith', 'Reaper', 'Nexus', 'Core', 'Flux',
+    'Pulse', 'Wave', 'Signal', 'Noise', 'Data', 'Net', 'Web', 'Cloud',
+    'Proxy', 'Tunnel', 'Gateway', 'Router', 'Switch', 'Hub', 'Node',
+    'Elite', 'Prime', 'Ultra', 'Mega', 'Giga', 'Tera', 'Peta', 'Exa',
+  ],
+
+  // Strains de cannabis
+  strains: [
+    'Kush', 'Haze', 'Diesel', 'Skunk', 'Widow', 'Dream', 'Crush', 'Punch',
+    'Gelato', 'Cookies', 'Cake', 'Pie', 'Sherbet', 'Sorbet', 'Mint',
+    'Berry', 'Cherry', 'Lemon', 'Lime', 'Orange', 'Grape', 'Mango',
+    'Pineapple', 'Apple', 'Banana', 'Strawberry', 'Blueberry', 'Raspberry',
+    'Purple', 'Blue', 'Green', 'White', 'Black', 'Red', 'Yellow', 'Gold',
+    'Silver', 'Platinum', 'Diamond', 'Crystal', 'Amber', 'Ruby', 'Emerald',
+    'Sapphire', 'Topaz', 'Onyx', 'Jade', 'Pearl', 'Coral', 'Ivory',
+    'Northern', 'Southern', 'Eastern', 'Western', 'Central', 'Arctic',
+    'Tropical', 'Alpine', 'Sahara', 'Aurora', 'Cosmic', 'Lunar', 'Solar',
+    'Stardust', 'Nebula', 'Galaxy', 'Comet', 'Asteroid', 'Meteor', 'Orbit',
+    'Rocket', 'Shuttle', 'Cruiser', 'Falcon', 'Eagle', 'Hawk', 'Raven',
+    'Wolf', 'Bear', 'Lion', 'Tiger', 'Dragon', 'Phoenix', 'Griffin',
+  ],
+
+  // Tipos de extractos
+  extracts: [
+    'Hash', 'Rosin', 'Shatter', 'Wax', 'Oil', 'Butter', 'Crumble', 'Live',
+    'Resin', 'Sauce', 'Diamonds', 'Badder', 'Batter', 'Sugar', 'Honey',
+    'Jelly', 'Jam', 'Bubble', 'Melt', 'Ice', 'Dry', 'Sift', 'Water',
+    'Solvent', 'Solventless', 'Press', 'Cure', 'Caviar', 'Moonrocks',
+    'Rick', 'Simpson', 'RSO', 'FECO', 'Distillate', 'Isolate', 'Broad',
+    'Full', 'Spectrum', 'Terpene', 'Flavonoid', 'Cannabinoid', 'CBD',
+    'THC', 'Delta', 'HHC', 'THCO', 'THCP', 'THCV', 'CBG', 'CBN',
+  ],
+
+  // Sufijos tecnológicos
+  suffixes: [
+    'Bot', 'Master', 'King', 'Lord', 'God', 'Father', 'System', 'Core',
+    'Hub', 'Node', 'Gate', 'Port', 'Host', 'Server', 'Client', 'Agent',
+    'Proxy', 'Shell', 'Root', 'Admin', 'User', 'Daemon', 'Service',
+  ],
+
+  // Referencias a Mr Robot / Hackerman
+  hackerman: [
+    'Elliot', 'Alderson', 'MrRobot', 'Fsociety', 'Darlene', 'Angela',
+    'Tyrell', 'Wellick', 'Whiterose', 'Price', 'Ecorp', 'Ecoin',
+    'Cisco', 'Roman', 'Letcher', 'Krista', 'Gideon', 'Allsafe',
+    'Hackerman', 'Hacker', 'Cracker', 'Script', 'Kiddie', 'Newbie',
+    'Exploit', 'Payload', 'Shellcode', 'Backdoor', 'Rootkit', 'Keylogger',
+    'Malware', 'Spyware', 'Ransomware', 'Botnet', 'Zombie', 'Drone',
+  ],
+}
+
+function generateRandomUsername(): string {
+  const { prefixes, strains, extracts } = THEME_GENERATORS
+
+  // Elegir patrón aleatorio
+  const patterns = [
+    // Prefix + Extract (ej: CyberHash, GhostRosin)
+    () => {
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
+      const extract = extracts[Math.floor(Math.random() * extracts.length)]
+      return `${prefix}${extract}`.toLowerCase()
+    },
+    // Prefix + Strain (ej: DarkKush, QuantumHaze)
+    () => {
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
+      const strain = strains[Math.floor(Math.random() * strains.length)]
+      return `${prefix}${strain}`.toLowerCase()
+    },
+    // Strain + Extract (ej: KushHash, HazeRosin)
+    () => {
+      const strain = strains[Math.floor(Math.random() * strains.length)]
+      const extract = extracts[Math.floor(Math.random() * extracts.length)]
+      return `${strain}${extract}`.toLowerCase()
+    },
+    // Prefix + Hackerman (ej: CyberElliot, GhostFsociety)
+    () => {
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
+      const hack = THEME_GENERATORS.hackerman[Math.floor(Math.random() * THEME_GENERATORS.hackerman.length)]
+      return `${prefix}${hack}`.toLowerCase()
+    },
+    // Extract + Hackerman (ej: HashRobot, RosinElliot)
+    () => {
+      const extract = extracts[Math.floor(Math.random() * extracts.length)]
+      const hack = THEME_GENERATORS.hackerman[Math.floor(Math.random() * THEME_GENERATORS.hackerman.length)]
+      return `${extract}${hack}`.toLowerCase()
+    },
+  ]
+
+  const pattern = patterns[Math.floor(Math.random() * patterns.length)]!
+  const baseName = pattern()
+
+  // Agregar número aleatorio si es muy corto
+  let username = baseName
+  if (username.length < 8) {
+    username += Math.floor(Math.random() * 999)
+  }
+
+  return `${username}bot`
+}
+
+function generateBotDisplayname(username: string): string {
+  // Convertir username a display name (quitar 'bot' y capitalizar)
+  const base = username.replace(/bot$/, '')
+  return base
+    .split(/(?=[A-Z])/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+    .replace(/(\d+)/g, ' $1')
+    .trim() + ' Bot'
+}
+
+function generateGroupName(botName: string): string {
+  const { prefixes, strains } = THEME_GENERATORS
+
+  const suffixes = [
+    'HQ', 'Hub', 'Central', 'Command', 'Control', 'Ops', 'Lab', 'Den',
+    'Lair', 'Base', 'Station', 'Network', 'Systems', 'Solutions', 'Tech',
+  ]
+
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
+  const strain = strains[Math.floor(Math.random() * strains.length)]
+  const suffix = suffixes[Math.floor(Math.random() * suffixes.length)]
+
+  return `${prefix}${strain} ${suffix}`
+}
+
 const cliLogger = {
   info: (msg: string) => console.log(chalk.blue('ℹ'), msg),
   success: (msg: string) => console.log(chalk.green('✓'), msg),
@@ -132,11 +265,14 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
 
     cliLogger.success('Connected to Telegram')
 
-    // Get bot info
-    const botName = options.botName ?? await input({ message: 'Enter bot display name:' })
-    let botUsername = options.botUsername
-    if (!botUsername) {
-      botUsername = await input({
+    // Get bot info - generate random names if not provided
+    let botName: string
+    let botUsername: string
+
+    if (options.botName || options.botUsername) {
+      // User provided at least one name
+      botName = options.botName ?? await input({ message: 'Enter bot display name:' })
+      botUsername = options.botUsername ?? await input({
         message: 'Enter bot username (must end in "bot"):',
         validate: (value: string) => {
           if (!value.endsWith('bot')) {
@@ -145,6 +281,13 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
           return true
         },
       })
+    } else {
+      // Generate random names automatically
+      botUsername = generateRandomUsername()
+      botName = generateBotDisplayname(botUsername)
+
+      cliLogger.info(`Generated random bot name: ${chalk.cyan(botName)}`)
+      cliLogger.info(`Generated username: ${chalk.cyan('@' + botUsername)}`)
     }
 
     // Step 2: Create bot via BotFather
@@ -168,11 +311,14 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
 
     spinner.succeed(`Bot created: @${botResult.botUsername}`)
 
-    // Step 3: Create supergroup/forum
-    const groupName = options.groupName ?? await input({
-      message: 'Enter group/forum title:',
-      default: `${botName} Control`,
-    })
+    // Step 3: Create supergroup/forum - generate random name if not provided
+    let groupName: string
+    if (options.groupName) {
+      groupName = options.groupName
+    } else {
+      groupName = generateGroupName(botName)
+      cliLogger.info(`Generated group name: ${chalk.cyan(groupName)}`)
+    }
 
     cliLogger.title('💬 Step 2: Creating Group/Forum')
     spinner.text = 'Creating supergroup with forum mode...'
