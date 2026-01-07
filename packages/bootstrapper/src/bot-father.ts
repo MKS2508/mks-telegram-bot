@@ -226,9 +226,11 @@ export class BotFatherManager {
     }
 
     // Try to extract username from the message
+    // BotFather sends: "You will find it at t.me/username" or "@username"
     const usernamePatterns = [
-      /@([A-Za-z0-9_]{5,32}bot)/i,
-      /username[^\w]*([A-Za-z0-9_]{5,32}bot)/i,
+      /t\.me\/([A-Za-z0-9_]{5,32}bot)/i,  // t.me/username format
+      /@([A-Za-z0-9_]{5,32}bot)/i,         // @username format
+      /username[^\w]*([A-Za-z0-9_]{5,32}bot)/i,  // "username: bot" format
     ]
 
     let username: string | undefined
