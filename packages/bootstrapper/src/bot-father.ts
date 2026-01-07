@@ -574,6 +574,9 @@ export class BotFatherManager {
           // @ts-ignore - button.text contains the bot display text
           const buttonText = button.text
 
+          // Debug: Print ALL buttons to see pagination buttons
+          console.log(`[DEBUG] Button found: "${buttonText}"`)
+
           // BotFather button format is usually: "BotName (@usernamebot)" or "@usernamebot"
           // Parse username from button text
           const usernameMatch = buttonText.match(/\(([A-Za-z0-9_]+bot)\)/) || buttonText.match(/@([A-Za-z0-9_]+bot)/)
@@ -610,13 +613,25 @@ export class BotFatherManager {
   }
 
   /**
-   * Find pagination button data by text
+   * Find pagination button data by text (supports multiple patterns)
    */
   private findPaginationButtonData(message: Message, buttonText: string): string | null {
     try {
       // @ts-ignore
       const msg = message.message
       if (!msg?.replyMarkup?.rows) return null
+
+      // Common pagination patterns to search for
+      const paginationPatterns = [
+        buttonText, // "Next"
+        '▶',
+        '→',
+        '›',
+        '»',
+        'Next page',
+        'Page',
+        '››',
+      ]
 
       for (const row of msg.replyMarkup.rows) {
         // @ts-ignore
@@ -625,12 +640,20 @@ export class BotFatherManager {
         // @ts-ignore
         for (const button of row.buttons) {
           // @ts-ignore
-          if (button.text === buttonText) {
-            // @ts-ignore - return the button data for clicking
-            return button.data
+          const buttonLabel = button.text
+
+          // Check if button matches any pagination pattern
+          for (const pattern of paginationPatterns) {
+            if (buttonLabel === pattern || buttonLabel.includes(pattern)) {
+              console.log(`[DEBUG] Found pagination button: "${buttonLabel}"`)
+              // @ts-ignore - return the button data for clicking
+              return button.data
+            }
           }
         }
       }
+
+      console.log(`[DEBUG] No pagination button found (looked for: ${paginationPatterns.join(', ')})`)
     } catch (error) {
       console.log('[DEBUG] Error finding pagination button:', error)
     }
