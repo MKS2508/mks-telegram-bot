@@ -958,11 +958,11 @@ async function handleListBots(options: BootstrapOptions): Promise<void> {
         console.log('')
       }
     } else {
-      // List mode: Show bots without tokens
-      spinner.text = 'Fetching bots from @BotFather...'
+      // List mode: Show bots without tokens (fetch all pages)
+      spinner.text = 'Fetching all bots from @BotFather...'
       spinner.start()
 
-      const result = await botFather.listBots()
+      const result = await botFather.listAllBots()
       spinner.stop()
 
       if (!result.success || !result.bots || result.bots.length === 0) {
