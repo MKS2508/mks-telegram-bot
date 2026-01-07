@@ -36,6 +36,8 @@ export class BotFatherManager {
   private messageHandlerRef: any = null
   private resolveResponse: ((message: Message) => void) | null = null
   private messageHandler: ((message: Message) => void) | null = null
+  private messageBuffer: Message[] = []
+  private isListening = false
 
   constructor(private client: BootstrapClient) {}
 
@@ -46,18 +48,26 @@ export class BotFatherManager {
    */
   async createBot(options: CreateBotOptions): Promise<BotCreationResult> {
     try {
+      // Start listening for messages early
+      this.setupMessageListener()
+      await this.sleep(500)
+
       // 1. Send /newbot to BotFather
       await this.sendMessageToBotFather('/newbot')
       await this.sleep(1000)
 
       // 2. Wait for "Choose a name" prompt and send bot name
-      const namePrompt = await this.waitForResponse(8000)
+      const namePrompt = await this.waitForResponse(10000)
       if (!namePrompt) {
+        this.removeMessageListener()
         return { success: false, error: 'No response from BotFather (timeout)' }
       }
 
       const namePromptText = this.extractMessageText(namePrompt)
+      console.log(`[DEBUG] BotFather response: "${namePromptText}"`)
+
       if (!this.isBotNamePrompt(namePromptText)) {
+        this.removeMessageListener()
         return { success: false, error: `Unexpected response: "${namePromptText}"` }
       }
 
@@ -65,13 +75,17 @@ export class BotFatherManager {
       await this.sleep(1000)
 
       // 3. Wait for "Choose a username" prompt and send username
-      const usernamePrompt = await this.waitForResponse(8000)
+      const usernamePrompt = await this.waitForResponse(10000)
       if (!usernamePrompt) {
+        this.removeMessageListener()
         return { success: false, error: 'No response after bot name (timeout)' }
       }
 
       const usernamePromptText = this.extractMessageText(usernamePrompt)
+      console.log(`[DEBUG] BotFather response: "${usernamePromptText}"`)
+
       if (!this.isUsernamePrompt(usernamePromptText)) {
+        this.removeMessageListener()
         return { success: false, error: `Unexpected response: "${usernamePromptText}"` }
       }
 
@@ -81,10 +95,12 @@ export class BotFatherManager {
       // 4. Wait for token/confirmation
       const tokenMessage = await this.waitForResponse(15000)
       if (!tokenMessage) {
+        this.removeMessageListener()
         return { success: false, error: 'No response after username (timeout)' }
       }
 
       const tokenText = this.extractMessageText(tokenMessage)
+      console.log(`[DEBUG] BotFather response: "${tokenText}"`)
       const result = this.parseBotToken(tokenText)
 
       // Clean up
@@ -214,10 +230,17 @@ export class BotFatherManager {
    * Set up message listener for BotFather responses
    */
   private setupMessageListener(): void {
+    if (this.isListening) {
+      return // Already listening
+    }
+
     const client = this.client.getClient()
 
     // Store the handler function reference
     this.messageHandler = (event: Message) => {
+      console.log(`[DEBUG] Message received from BotFather`)
+      // Always buffer messages
+      this.messageBuffer.push(event)
       this.lastMessage = event
 
       // Resolve pending promise if waiting
@@ -233,6 +256,8 @@ export class BotFatherManager {
       fromUsers: [this.botFatherUsername],
     })
     this.messageHandlerRef = client.addEventHandler(this.messageHandler, event)
+    this.isListening = true
+    console.log(`[DEBUG] BotFather listener started`)
   }
 
   /**
@@ -252,6 +277,9 @@ export class BotFatherManager {
     this.messageHandler = null
     this.lastMessage = null
     this.resolveResponse = null
+    this.messageBuffer = []
+    this.isListening = false
+    console.log(`[DEBUG] BotFather listener stopped`)
   }
 
   /**
@@ -261,10 +289,10 @@ export class BotFatherManager {
    */
   private waitForResponse(timeout: number): Promise<Message | null> {
     return new Promise((resolve) => {
-      // If we already have a message, return it immediately
-      if (this.lastMessage) {
-        const message = this.lastMessage
-        this.lastMessage = null
+      // Check buffer first for any pending messages
+      if (this.messageBuffer.length > 0) {
+        const message = this.messageBuffer.shift()!
+        console.log(`[DEBUG] Returning buffered message`)
         resolve(message)
         return
       }
@@ -281,6 +309,7 @@ export class BotFatherManager {
       setTimeout(() => {
         if (this.resolveResponse === resolve) {
           this.resolveResponse = null
+          console.log(`[DEBUG] Timeout waiting for BotFather response`)
           resolve(null)
         }
       }, timeout)
