@@ -1,5 +1,6 @@
 import type { BootstrapClient } from './client.js'
 import { NewMessage } from 'telegram/events'
+import { EditedMessage } from 'telegram/events/EditedMessage'
 
 /**
  * Result of bot creation
@@ -300,7 +301,7 @@ export class BotFatherManager {
 
     // Store the handler function reference
     this.messageHandler = (event: Message) => {
-      console.log(`[DEBUG] Message received from BotFather`)
+      console.log(`[DEBUG] Message event received from BotFather`)
       // Always buffer messages
       this.messageBuffer.push(event)
       this.lastMessage = event
@@ -313,13 +314,21 @@ export class BotFatherManager {
       }
     }
 
-    // Create the event filter and store the complete handler reference
-    const event = new NewMessage({
+    // Listener for NEW messages from BotFather
+    const newMessageEvent = new NewMessage({
       fromUsers: [this.botFatherUsername],
     })
-    this.messageHandlerRef = client.addEventHandler(this.messageHandler, event)
+    client.addEventHandler(this.messageHandler, newMessageEvent)
+
+    // Listener for EDITED messages from BotFather (pagination updates)
+    const editedMessageEvent = new EditedMessage({
+      fromUsers: [this.botFatherUsername],
+    })
+    client.addEventHandler(this.messageHandler, editedMessageEvent)
+
+    this.messageHandlerRef = true // Mark as configured
     this.isListening = true
-    console.log(`[DEBUG] BotFather listener started`)
+    console.log(`[DEBUG] BotFather listener started (NewMessage + EditedMessage)`)
   }
 
   /**
@@ -328,11 +337,18 @@ export class BotFatherManager {
   private removeMessageListener(): void {
     if (this.messageHandlerRef && this.messageHandler) {
       const client = this.client.getClient()
-      // Remove with the exact same handler and filter
-      const event = new NewMessage({
+
+      // Remove both listeners (NewMessage and EditedMessage)
+      const newMessageEvent = new NewMessage({
         fromUsers: [this.botFatherUsername],
       })
-      client.removeEventHandler(this.messageHandler, event)
+      const editedMessageEvent = new EditedMessage({
+        fromUsers: [this.botFatherUsername],
+      })
+
+      client.removeEventHandler(this.messageHandler, newMessageEvent)
+      client.removeEventHandler(this.messageHandler, editedMessageEvent)
+
       this.messageHandlerRef = null
     }
 
