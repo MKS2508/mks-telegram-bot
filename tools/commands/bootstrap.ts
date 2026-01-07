@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { resolve } from 'path'
 import chalk from 'chalk'
-import { input, confirm } from '@inquirer/prompts'
+import { input, confirm, checkbox } from '@inquirer/prompts'
 import ora from 'ora'
 import type { BotCommand } from './index.js'
 import {
@@ -173,6 +173,8 @@ interface BootstrapOptions {
   auto?: boolean
   bot?: string // Target specific bot
   list?: boolean // List available bots
+  import?: boolean // Import all available bots
+  interactive?: boolean // Select bots to import interactively
   reuse?: boolean // Skip prompts, reuse if exists
   force?: boolean // Force recreate
 }
@@ -193,6 +195,8 @@ const command: BootstrapCommand = {
       .option('--auto', 'Use auto-generated names without confirmation', false)
       .option('--bot <value>', 'Target specific bot')
       .option('--list', 'List available bots from BotFather')
+      .option('--import', 'Import all available bots (use with --list)')
+      .option('--interactive', 'Select bots to import interactively (use with --list)')
       .option('--reuse', 'Reuse existing configuration without prompts')
       .option('--force', 'Force recreate existing configuration')
       .action(async (options) => {
@@ -225,7 +229,7 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
 
   // Handle --list flag: Show available bots from BotFather and exit
   if (options.list) {
-    await handleListBots()
+    await handleListBots(options)
     return
   }
 
@@ -726,9 +730,12 @@ function updateEnvVar(content: string, key: string, value: string): string {
 
 /**
  * Handle --list flag: Show available bots from BotFather and exit
+ * @param options - Bootstrap options including --import and --interactive flags
  */
-async function handleListBots(): Promise<void> {
-  cliLogger.title('📋 Available Bots')
+async function handleListBots(options: BootstrapOptions): Promise<void> {
+  const shouldImport = options.import || options.interactive
+
+  cliLogger.title(shouldImport ? '📋 Import Bots from BotFather' : '📋 Available Bots')
 
   // Get API credentials
   const apiId = await input({
@@ -770,49 +777,186 @@ async function handleListBots(): Promise<void> {
 
     // Fetch available bots from BotFather
     const botFather = new BotFatherManager(client)
-    spinner.text = 'Fetching bots from @BotFather...'
-    spinner.start()
 
-    const result = await botFather.listBots()
+    if (shouldImport) {
+      // Import mode: Fetch all bots with tokens
+      spinner.text = 'Fetching all bots with tokens from @BotFather...'
+      spinner.start()
 
-    spinner.stop()
+      const botsWithTokens = await botFather.getAllBotsWithTokens()
+      spinner.stop()
 
-    if (!result.success || !result.bots || result.bots.length === 0) {
-      cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
-      return
-    }
-
-    console.log('')
-    console.log(chalk.bold(`Found ${result.bots.length} bot(s):`))
-    console.log('')
-
-    for (const bot of result.bots) {
-      console.log(`  ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}`)
-    }
-
-    console.log('')
-    cliLogger.info('To use a specific bot, run: bun run bootstrap --bot <username>')
-    console.log('')
-
-    // Also show configured bots from EnvManager
-    const envManager = new EnvManager()
-    const configuredBots = envManager.listBots()
-
-    if (configuredBots.length > 0) {
-      console.log(chalk.bold('Configured in this project:'))
-      console.log('')
-
-      for (const bot of configuredBots) {
-        const activeMarker = bot.isActive ? chalk.green('✓ ') : '  '
-        const environments = []
-        if (bot.hasLocal) environments.push(chalk.cyan('local'))
-        if (bot.hasStaging) environments.push(chalk.yellow('staging'))
-        if (bot.hasProduction) environments.push(chalk.red('production'))
-
-        console.log(`  ${activeMarker}${chalk.green('@' + bot.username)}`)
-        console.log(`      Environments: ${environments.join(', ')}`)
+      if (botsWithTokens.length === 0) {
+        cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
+        await client.disconnect()
+        return
       }
+
       console.log('')
+      console.log(chalk.bold(`Found ${botsWithTokens.length} bot(s) across all pages:`))
+      console.log('')
+
+      for (const bot of botsWithTokens) {
+        console.log(`  ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}`)
+        console.log(`      Token: ${chalk.yellow(bot.token.slice(0, 15) + '...')}`)
+      }
+
+      console.log('')
+
+      // Determine which bots to import
+      let botsToImport: Array<{ username: string; name: string; token: string }>
+
+      if (options.import && !options.interactive) {
+        // Import all bots
+        const confirmImport = await confirm({
+          message: `Import all ${botsWithTokens.length} bots?`,
+          default: true,
+        })
+
+        if (!confirmImport) {
+          cliLogger.info('Import cancelled')
+          await client.disconnect()
+          return
+        }
+
+        botsToImport = botsWithTokens
+      } else {
+        // Interactive selection
+        const selected = await checkbox({
+          message: 'Select bots to import (space to select, enter to continue):',
+          choices: botsWithTokens.map((bot) => ({
+            name: `@${bot.username} - ${bot.name}`,
+            value: bot,
+            checked: false,
+          })),
+        })
+
+        if (selected.length === 0) {
+          cliLogger.info('No bots selected')
+          await client.disconnect()
+          return
+        }
+
+        botsToImport = selected
+      }
+
+      // Import selected bots
+      console.log('')
+      cliLogger.title('📦 Importing Bots')
+
+      const envManager = new EnvManager()
+      const environment = (options.environment ?? 'local') as Environment
+
+      let imported = 0
+      let skipped = 0
+      let failed = 0
+
+      for (const bot of botsToImport) {
+        const botExists = envManager.botExists(bot.username)
+
+        if (botExists) {
+          cliLogger.warn(`@${bot.username} already configured, skipping`)
+          skipped++
+          continue
+        }
+
+        spinner.text = `Creating config for @${bot.username}...`
+        spinner.start()
+
+        try {
+          await envManager.createEnv(bot.username, environment, {
+            botToken: bot.token,
+            mode: 'polling',
+          })
+
+          spinner.succeed(`Created config for @${bot.username}`)
+          imported++
+        } catch (error) {
+          spinner.fail(`Failed to create config for @${bot.username}`)
+          failed++
+        }
+      }
+
+      // Set active bot if not set
+      const currentActive = envManager.getActiveBot()
+      if (!currentActive && botsToImport.length > 0) {
+        const firstBot = botsToImport[0]
+        if (firstBot) {
+          await envManager.setActiveBot(firstBot.username)
+          cliLogger.success(`Set @${firstBot.username} as active bot`)
+        }
+      }
+
+      // Summary
+      console.log('')
+      cliLogger.title('✅ Import Complete')
+      console.log('')
+      console.log(chalk.bold('Summary:'))
+      console.log(`  Imported: ${chalk.green(String(imported))}`)
+      console.log(`  Skipped: ${chalk.yellow(String(skipped))}`)
+      console.log(`  Failed:  ${chalk.red(String(failed))}`)
+      console.log('')
+
+      if (imported > 0) {
+        cliLogger.success('Bots imported successfully!')
+        cliLogger.info('Configuration saved to:')
+        for (const bot of botsToImport) {
+          if (!envManager.botExists(bot.username)) continue
+          console.log(`  ${chalk.cyan(`core/.envs/${bot.username}/${environment}.env`)}`)
+        }
+        console.log('')
+        cliLogger.info('Next steps:')
+        console.log(`  ${chalk.dim('1.')} Run: ${chalk.cyan('bun run dev')}`)
+        console.log(`  ${chalk.dim('2.')} Send /start to your bot in Telegram`)
+        console.log(`  ${chalk.dim('3.')} Run: ${chalk.cyan('bun run bot list')} to see all configured bots`)
+        console.log('')
+      }
+    } else {
+      // List mode: Show bots without tokens
+      spinner.text = 'Fetching bots from @BotFather...'
+      spinner.start()
+
+      const result = await botFather.listBots()
+      spinner.stop()
+
+      if (!result.success || !result.bots || result.bots.length === 0) {
+        cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
+        await client.disconnect()
+        return
+      }
+
+      console.log('')
+      console.log(chalk.bold(`Found ${result.bots.length} bot(s):`))
+      console.log('')
+
+      for (const bot of result.bots) {
+        console.log(`  ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}`)
+      }
+
+      console.log('')
+      cliLogger.info('To use a specific bot, run: bun run bootstrap --bot <username>')
+      console.log('')
+
+      // Also show configured bots from EnvManager
+      const envManager = new EnvManager()
+      const configuredBots = envManager.listBots()
+
+      if (configuredBots.length > 0) {
+        console.log(chalk.bold('Configured in this project:'))
+        console.log('')
+
+        for (const bot of configuredBots) {
+          const activeMarker = bot.isActive ? chalk.green('✓ ') : '  '
+          const environments = []
+          if (bot.hasLocal) environments.push(chalk.cyan('local'))
+          if (bot.hasStaging) environments.push(chalk.yellow('staging'))
+          if (bot.hasProduction) environments.push(chalk.red('production'))
+
+          console.log(`  ${activeMarker}${chalk.green('@' + bot.username)}`)
+          console.log(`      Environments: ${environments.join(', ')}`)
+        }
+        console.log('')
+      }
     }
 
     await client.disconnect()
