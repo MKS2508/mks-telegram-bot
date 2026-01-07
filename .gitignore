@@ -10,6 +10,12 @@ dist/
 .env.local
 .env.staging
 .env.production
+.env.backup
+
+# NEW: Multibot environment directory
+core/.envs/
+core/.envs/*/
+!core/.envs/.gitkeep
 
 # OS
 .DS_Store

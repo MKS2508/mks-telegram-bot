@@ -22,6 +22,38 @@ export interface CreateBotOptions {
 }
 
 /**
+ * Bot information from BotFather
+ */
+export interface BotInfo {
+  username: string // @botname
+  name: string // Display name
+  token?: string // Bot token (if available)
+  description?: string // Bot description
+  about?: string // About text
+  canJoinGroups?: boolean
+  canReadAllGroupMessages?: boolean
+  supportsInlineQueries?: boolean
+}
+
+/**
+ * Result of listing bots
+ */
+export interface BotListResult {
+  success: boolean
+  bots?: BotInfo[]
+  error?: string
+}
+
+/**
+ * Result of getting bot info
+ */
+export interface BotInfoResult {
+  success: boolean
+  bot?: BotInfo
+  error?: string
+}
+
+/**
  * Message type - any message from Telegram
  */
 type Message = any
@@ -351,5 +383,207 @@ export class BotFatherManager {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  /**
+   * List all bots created by the user via BotFather
+   * @returns List of bots with their information
+   */
+  async listBots(): Promise<BotListResult> {
+    try {
+      // Start listening for messages
+      this.setupMessageListener()
+      await this.sleep(500)
+
+      // Send /mybots command to BotFather
+      await this.sendMessageToBotFather('/mybots')
+      await this.sleep(2000)
+
+      // Wait for response with bot list
+      const response = await this.waitForResponse(15000)
+      if (!response) {
+        this.removeMessageListener()
+        return { success: false, error: 'No response from BotFather (timeout)' }
+      }
+
+      const responseText = this.extractMessageText(response)
+      console.log(`[DEBUG] BotFather /mybots response: "${responseText}"`)
+
+      // Parse the bot list from response
+      const bots = this.parseBotList(responseText)
+
+      // Clean up
+      this.removeMessageListener()
+
+      return { success: true, bots }
+    } catch (error) {
+      this.removeMessageListener()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Get detailed info about a specific bot
+   * @param botUsername Bot username (with or without @)
+   */
+  async getBotInfo(botUsername: string): Promise<BotInfoResult> {
+    try {
+      // Clean username
+      const username = botUsername.startsWith('@') ? botUsername.slice(1) : botUsername
+
+      // Start listening for messages
+      this.setupMessageListener()
+      await this.sleep(500)
+
+      // Send /mybots command first
+      await this.sendMessageToBotFather('/mybots')
+      await this.sleep(2000)
+
+      // Try to get specific bot info
+      // Note: BotFather doesn't have a direct command for this, so we parse from the list
+      const response = await this.waitForResponse(15000)
+      if (!response) {
+        this.removeMessageListener()
+        return { success: false, error: 'No response from BotFather (timeout)' }
+      }
+
+      const responseText = this.extractMessageText(response)
+      const allBots = this.parseBotList(responseText)
+
+      // Find the requested bot
+      const bot = allBots.find((b) => b.username === username)
+
+      this.removeMessageListener()
+
+      if (!bot) {
+        return { success: false, error: `Bot @${username} not found` }
+      }
+
+      return { success: true, bot }
+    } catch (error) {
+      this.removeMessageListener()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Check if a bot username is available
+   * @param botUsername Desired username
+   */
+  async checkUsernameAvailable(botUsername: string): Promise<boolean> {
+    try {
+      const username = botUsername.startsWith('@') ? botUsername.slice(1) : botUsername
+
+      // Start listening for messages
+      this.setupMessageListener()
+      await this.sleep(500)
+
+      // Try to create a bot with this username (will fail if taken)
+      await this.sendMessageToBotFather('/newbot')
+      await this.sleep(1000)
+
+      // Wait for name prompt
+      const namePrompt = await this.waitForResponse(10000)
+      if (!namePrompt) {
+        this.removeMessageListener()
+        return false
+      }
+
+      // Send a dummy name
+      await this.sendMessageToBotFather('Test')
+      await this.sleep(1000)
+
+      // Wait for username prompt
+      const usernamePrompt = await this.waitForResponse(10000)
+      if (!usernamePrompt) {
+        this.removeMessageListener()
+        return false
+      }
+
+      // Send the username to check
+      await this.sendMessageToBotFather(username)
+      await this.sleep(2000)
+
+      // Check response
+      const response = await this.waitForResponse(10000)
+      if (!response) {
+        this.removeMessageListener()
+        return false
+      }
+
+      const responseText = this.extractMessageText(response)
+
+      // Clean up - cancel the bot creation
+      await this.sendMessageToBotFather('/cancel')
+      this.removeMessageListener()
+
+      // If username is taken, BotFather will say something like "is already taken"
+      if (responseText.toLowerCase().includes('already taken') || responseText.toLowerCase().includes('occupied')) {
+        return false
+      }
+
+      return true
+    } catch (error) {
+      this.removeMessageListener()
+      return false
+    }
+  }
+
+  /**
+   * Parse bot list from BotFather response
+   * @param responseText The text response from BotFather
+   * @returns Array of bot information
+   */
+  private parseBotList(responseText: string): BotInfo[] {
+    const bots: BotInfo[] = []
+
+    // BotFather sends bot list in format:
+    // "BotName (@usernamebot) - Description"
+    // or numbered list:
+    // "1. BotName (@usernamebot)"
+    const patterns = [
+      // Match: "BotName (@usernamebot)" or "1. BotName (@usernamebot)"
+      /(?:\d+\.\s*)?(\S+)\s+\(([A-Za-z0-9_]+bot)\)/g,
+      // Match: "@usernamebot - BotName"
+      /@([A-Za-z0-9_]+bot)\s*-\s*([^\n]+)/g,
+    ]
+
+    for (const pattern of patterns) {
+      let match
+      // biome-ignore lint/suspicious/noAssignInExpressions: Required for regex exec loop
+      while ((match = pattern.exec(responseText)) !== null) {
+        if (pattern === patterns[0]) {
+          // First pattern: name then username
+          const name = match[1]?.trim()
+          const username = match[2]?.trim()
+          if (name && username) {
+            bots.push({ username, name })
+          }
+        } else {
+          // Second pattern: username then name
+          const username = match[1]?.trim()
+          const name = match[2]?.trim()
+          if (username && name) {
+            bots.push({ username, name })
+          }
+        }
+      }
+    }
+
+    // Remove duplicates
+    const seen = new Set<string>()
+    return bots.filter((bot) => {
+      if (seen.has(bot.username)) {
+        return false
+      }
+      seen.add(bot.username)
+      return true
+    })
   }
 }
