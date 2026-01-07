@@ -1,5 +1,4 @@
 import type { BootstrapClient } from './client.js'
-import { Api } from 'telegram'
 
 /**
  * Result of group creation
@@ -48,6 +47,8 @@ export class GroupManager {
     const tgClient = this.client.getClient()
 
     try {
+      const { Api } = await import('telegram/tl/index.js')
+
       // Create channel with forum mode
       // @ts-ignore - CreateChannel exists but type might be different
       const result = await tgClient.invoke(new Api.Channels.CreateChannel({
@@ -105,6 +106,8 @@ export class GroupManager {
         return { success: false, error: 'Could not resolve bot entity' }
       }
 
+      const { Api } = await import('telegram/tl/index.js')
+
       // Create InputPeerChannel with proper access hash
       const inputPeerChannel: any = {
         _: 'inputPeerChannel',
@@ -154,6 +157,8 @@ export class GroupManager {
       if (!channelEntity) {
         return { success: false, error: 'Could not resolve channel entity' }
       }
+
+      const { Api } = await import('telegram/tl/index.js')
 
       const inputPeerChannel: any = {
         _: 'inputPeerChannel',
