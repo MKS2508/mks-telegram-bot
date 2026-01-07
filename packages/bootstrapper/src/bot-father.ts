@@ -118,26 +118,54 @@ export class BotFatherManager {
 
   /**
    * Extract text from message object
+   * GramJS NewMessage event structure: event.message.message (for text content)
    */
   private extractMessageText(message: Message): string {
-    // @ts-ignore - message property exists but type definition is incomplete
-    if (message.message) {
+    try {
+      // GramJS NewMessage events have nested structure:
+      // event (what handler receives) -> .message (Message object) -> .message (text content)
+
+      // @ts-ignore - accessing GramJS internal structure
+      const msg = message.message
+
+      // If msg exists and has .message property (text content)
       // @ts-ignore
-      return String(message.message)
-    }
+      if (msg?.message) {
+        // @ts-ignore
+        return String(msg.message)
+      }
 
-    // Try to get text from different message types
-    if ('text' in message && message.text) {
-      return String(message.text)
-    }
-
-    // @ts-ignore
-    if ('message' in message && typeof message.message === 'string') {
+      // Try direct .text property on the message object
       // @ts-ignore
-      return message.message
-    }
+      if (msg?.text) {
+        // @ts-ignore - text might be an array (FormattedMessage)
+        const text = msg.text
+        if (Array.isArray(text)) {
+          // FormattedMessage is an array with text property
+          // @ts-ignore
+          return text.map((t: any) => t.text || t).join('')
+        }
+        return String(text)
+      }
 
-    return ''
+      // Fallback: try direct message.text
+      if ('text' in message && message.text) {
+        const text = message.text
+        if (Array.isArray(text)) {
+          // @ts-ignore
+          return text.map((t: any) => t.text || t).join('')
+        }
+        return String(text)
+      }
+
+      // DEBUG: Log structure if we can't extract
+      console.log('[DEBUG] Message structure:', JSON.stringify(message).slice(0, 200))
+
+      return ''
+    } catch (error) {
+      console.log('[DEBUG] Error extracting message text:', error)
+      return ''
+    }
   }
 
   /**
