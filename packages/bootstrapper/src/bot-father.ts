@@ -672,18 +672,25 @@ export class BotFatherManager {
         return false
       }
 
+      // Get raw Telegram client from BootstrapClient wrapper
+      const tgClient = this.client.getClient()
+
       // Get BotFather peer
-      // @ts-ignore
-      const botFatherPeer = await this.client.getEntity(this.botFatherUsername)
+      const botFatherPeer = await tgClient.getEntity(this.botFatherUsername)
+
+      // Convert button data to Buffer (required by Telegram API)
+      const dataBuffer = Buffer.from(buttonData, 'utf-8')
+
+      // Import Telegram TL API
+      const { Api } = await import('telegram/tl/index.js')
 
       // Click button using getBotCallbackAnswer
       // @ts-ignore
-      const result = await this.client.invoke({
-        '@type': 'messages.getBotCallbackAnswer',
+      const result = await tgClient.invoke(new Api.messages.GetBotCallbackAnswer({
         peer: botFatherPeer,
         msgId: msg.id,
-        data: buttonData,
-      })
+        data: dataBuffer,
+      }))
 
       console.log(`[DEBUG] Clicked button with data: ${buttonData.slice(0, 20)}...`)
       return true
