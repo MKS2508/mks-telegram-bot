@@ -1,4 +1,12 @@
 import type { BootstrapClient } from './client.js'
+import bigInt, { type BigInteger } from 'big-integer'
+
+/**
+ * Helper to convert number/bigint to BigInteger for GramJS
+ */
+function toBigInteger(value: number | bigint): BigInteger {
+  return bigInt(value.toString())
+}
 
 /**
  * Result of group creation
@@ -112,16 +120,13 @@ export class GroupManager {
 
       const { Api } = await import('telegram/tl/index.js')
 
-      // Create InputPeerChannel with proper access hash
-      const inputPeerChannel: any = {
-        _: 'inputPeerChannel',
-        channelId: this.extractChannelId(chatId),
-        accessHash: channelEntity.accessHash,
-      }
-
       // @ts-ignore - EditAdmin exists but type might be incomplete
       await tgClient.invoke(new Api.channels.EditAdmin({
-        channel: inputPeerChannel,
+        // @ts-ignore - InputPeerChannel constructor exists
+        channel: new Api.InputPeerChannel({
+          channelId: toBigInteger(this.extractChannelId(chatId)),
+          accessHash: toBigInteger(channelEntity.accessHash),
+        }),
         userId: botEntity,
         adminRights: new Api.ChatAdminRights({
           anonymous: false,
@@ -164,15 +169,13 @@ export class GroupManager {
 
       const { Api } = await import('telegram/tl/index.js')
 
-      const inputPeerChannel: any = {
-        _: 'inputPeerChannel',
-        channelId: this.extractChannelId(chatId),
-        accessHash: channelEntity.accessHash,
-      }
-
       // @ts-ignore - ExportInvite exists but type might be incomplete
       const result = await tgClient.invoke(new Api.channels.ExportInvite({
-        channel: inputPeerChannel,
+        // @ts-ignore - InputPeerChannel constructor exists
+        channel: new Api.InputPeerChannel({
+          channelId: toBigInteger(this.extractChannelId(chatId)),
+          accessHash: toBigInteger(channelEntity.accessHash),
+        }),
       }))
 
       return {

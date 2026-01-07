@@ -167,6 +167,7 @@ interface BootstrapOptions {
   botUsername?: string
   groupName?: string
   skipTopics?: boolean
+  auto?: boolean
 }
 
 const command: BootstrapCommand = {
@@ -182,6 +183,7 @@ const command: BootstrapCommand = {
       .option('--bot-username <value>', 'Bot username (must end in "bot")')
       .option('--group-name <value>', 'Group/forum title')
       .option('--skip-topics', 'Skip creating topics', false)
+      .option('--auto', 'Use auto-generated names without confirmation', false)
       .action(async (options) => {
         await handleBootstrap(options)
       })
@@ -270,7 +272,7 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
     let botUsername: string
 
     if (options.botName || options.botUsername) {
-      // User provided at least one name
+      // User provided names - use directly
       botName = options.botName ?? await input({ message: 'Enter bot display name:' })
       botUsername = options.botUsername ?? await input({
         message: 'Enter bot username (must end in "bot"):',
@@ -281,13 +283,40 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
           return true
         },
       })
-    } else {
-      // Generate random names automatically
+    } else if (options.auto) {
+      // AUTO MODE - generate without prompting
       botUsername = generateRandomUsername()
       botName = generateBotDisplayname(botUsername)
 
-      cliLogger.info(`Generated random bot name: ${chalk.cyan(botName)}`)
+      cliLogger.info(`Auto-generated bot name: ${chalk.cyan(botName)}`)
+      cliLogger.info(`Auto-generated username: ${chalk.cyan('@' + botUsername)}`)
+    } else {
+      // INTERACTIVE MODE - generate and prompt for confirmation
+      botUsername = generateRandomUsername()
+      botName = generateBotDisplayname(botUsername)
+
+      cliLogger.info(`Generated bot name: ${chalk.cyan(botName)}`)
       cliLogger.info(`Generated username: ${chalk.cyan('@' + botUsername)}`)
+      console.log('')
+
+      const useGenerated = await confirm({
+        message: 'Use these auto-generated names?',
+        default: true,
+      })
+
+      if (!useGenerated) {
+        // User wants custom names
+        botName = await input({ message: 'Enter bot display name:' })
+        botUsername = await input({
+          message: 'Enter bot username (must end in "bot"):',
+          validate: (value: string) => {
+            if (!value.endsWith('bot')) {
+              return 'Username must end with "bot"'
+            }
+            return true
+          },
+        })
+      }
     }
 
     // Step 2: Create bot via BotFather
@@ -315,9 +344,24 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
     let groupName: string
     if (options.groupName) {
       groupName = options.groupName
+    } else if (options.auto) {
+      groupName = generateGroupName(botName)
+      cliLogger.info(`Auto-generated group name: ${chalk.cyan(groupName)}`)
     } else {
       groupName = generateGroupName(botName)
       cliLogger.info(`Generated group name: ${chalk.cyan(groupName)}`)
+
+      const useGeneratedGroup = await confirm({
+        message: `Use group name "${groupName}"?`,
+        default: true,
+      })
+
+      if (!useGeneratedGroup) {
+        groupName = await input({
+          message: 'Enter group/forum title:',
+          default: `${botName} Control`,
+        })
+      }
     }
 
     cliLogger.title('💬 Step 2: Creating Group/Forum')

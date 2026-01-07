@@ -8,6 +8,13 @@ import * as path from 'path'
 import * as os from 'os'
 
 /**
+ * Helper to convert number/bigint to BigInteger for GramJS
+ */
+function toBigInteger(value: number | bigint): BigInteger {
+  return bigInt(value.toString())
+}
+
+/**
  * Configuration for the Telegram client
  */
 export interface TelegramClientConfig {
@@ -309,8 +316,8 @@ export class BootstrapClient {
   }> {
     try {
       const { Api } = await import('telegram/tl/index.js')
-      // @ts-ignore - createChannel exists on Api.Channels
-      const result = await this.client.invoke(new Api.Channels.CreateChannel({
+      // @ts-ignore - createChannel exists on Api.channels
+      const result = await this.client.invoke(new Api.channels.CreateChannel({
         title,
         about,
         megagroup,
@@ -351,15 +358,13 @@ export class BootstrapClient {
     try {
       const { Api } = await import('telegram/tl/index.js')
 
-      const inputPeerChannel = {
-        _: 'inputPeerChannel',
-        channelId: Math.abs(channelId),
-        accessHash: 0n, // Note: This might need to be fetched
-      }
-
       // @ts-ignore - editAdmin exists
-      await this.client.invoke(new Api.Channels.EditAdmin({
-        channel: inputPeerChannel,
+      await this.client.invoke(new Api.channels.EditAdmin({
+        // @ts-ignore - InputPeerChannel constructor exists
+        channel: new Api.InputPeerChannel({
+          channelId: toBigInteger(Math.abs(channelId)),
+          accessHash: toBigInteger(0n), // Note: This might need to be fetched
+        }),
         userId,
         adminRights: new Api.ChatAdminRights({
           anonymous: false,
@@ -390,15 +395,13 @@ export class BootstrapClient {
     try {
       const { Api } = await import('telegram/tl/index.js')
 
-      const inputPeerChannel = {
-        _: 'inputPeerChannel',
-        channelId: Math.abs(channelId),
-        accessHash: 0n,
-      }
-
       // @ts-ignore - exportInvite exists
-      const result = await this.client.invoke(new Api.Channels.ExportInvite({
-        channel: inputPeerChannel,
+      const result = await this.client.invoke(new Api.channels.ExportInvite({
+        // @ts-ignore - InputPeerChannel constructor exists
+        channel: new Api.InputPeerChannel({
+          channelId: toBigInteger(Math.abs(channelId)),
+          accessHash: toBigInteger(0n),
+        }),
       }))
 
       return {
