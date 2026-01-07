@@ -36,6 +36,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@inquirer/prompts": "^8.1.0",
+        "@mks2508/better-logger": "^4.0.0",
         "big-integer": "^1.6.52",
         "telegraf": "^4.16.3",
         "telegram": "^2.26.22",

@@ -1,14 +1,14 @@
 export { BootstrapClient } from './client.js'
 export type { TelegramClientConfig, SessionData } from './client.js'
 
-export { BotFatherManager } from './bot-father.js'
+export { BotFatherManager } from './bot-father/index.js'
 export type {
   BotCreationResult,
   CreateBotOptions,
   BotInfo,
   BotListResult,
   BotInfoResult,
-} from './bot-father.js'
+} from './bot-father/index.js'
 
 export { GroupManager } from './group-manager.js'
 export type { GroupCreationResult, CreateSupergroupOptions } from './group-manager.js'

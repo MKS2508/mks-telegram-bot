@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
 import { resolve, dirname } from 'path'
 import type { BootstrapClient } from './client.js'
-import type { BotFatherManager, BotInfo } from './bot-father.js'
+import type { BotFatherManager, BotInfo } from './bot-father/index.js'
 import type { GroupManager } from './group-manager.js'
 import type { TopicManager } from './topic-manager.js'
 import type { EnvManager } from './env-manager.js'
