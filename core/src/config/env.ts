@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import { BotTimeouts, BotLimits } from '../types/constants.js'
+import { readFileSync, existsSync, readlinkSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
 export enum Environment {
   LOCAL = 'local',
@@ -86,12 +89,138 @@ const envSchema = z.object({
 })
 
 /**
+ * Get the directory of the current module
+ */
+function getModuleDir(): string {
+  const __filename = fileURLToPath(import.meta.url)
+  return dirname(__filename)
+}
+
+/**
+ * Load .env file from the new .envs/ structure
+ * @param botUsername Bot username (without @)
+ * @param environment Environment (local, staging, production)
+ * @returns Parsed environment variables or null if file doesn't exist
+ */
+function loadEnvFile(botUsername: string, environment: string): Record<string, string> | null {
+  const coreDir = resolve(getModuleDir(), '../..')
+  const envPath = resolve(coreDir, '.envs', botUsername, `${environment}.env`)
+
+  if (!existsSync(envPath)) {
+    return null
+  }
+
+  const content = readFileSync(envPath, 'utf-8')
+  const envVars: Record<string, string> = {}
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue
+    }
+
+    const [key, ...valueParts] = trimmed.split('=')
+    if (key && valueParts.length > 0) {
+      envVars[key] = valueParts.join('=')
+    }
+  }
+
+  return envVars
+}
+
+/**
+ * Get the active bot username from TG_BOT env var or .active symlink
+ * @returns Bot username or null if not found
+ */
+function getActiveBot(): string | null {
+  // Check TG_BOT env var first
+  if (process.env.TG_BOT) {
+    return process.env.TG_BOT
+  }
+
+  // Check .active symlink
+  const coreDir = resolve(getModuleDir(), '../..')
+  const activeSymlink = resolve(coreDir, '.envs', '.active')
+
+  if (!existsSync(activeSymlink)) {
+    return null
+  }
+
+  try {
+    const target = readlinkSync(activeSymlink)
+    return target
+  } catch {
+    return null
+  }
+}
+
+/**
  * Loads and validates environment variables.
+ * Supports both the new .envs/ structure and legacy .env.{environment} files.
  * @returns EnvConfig on success, throws on validation failure
  * @throws Error if environment variables are invalid or required variables are missing
  */
 export function loadEnvConfig(): EnvConfig {
-  const result = envSchema.safeParse(process.env)
+  // Try to load from new .envs/ structure first
+  const activeBot = getActiveBot()
+  const environment = process.env.TG_ENV || 'local'
+
+  // Filter out undefined values from process.env
+  const processEnvClean: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      processEnvClean[key] = value
+    }
+  }
+
+  let envVars: Record<string, string> = { ...processEnvClean }
+
+  if (activeBot) {
+    // Load bot-specific environment file
+    const botEnvVars = loadEnvFile(activeBot, environment)
+    if (botEnvVars) {
+      // Merge bot env vars with process.env (bot vars take precedence)
+      envVars = { ...processEnvClean, ...botEnvVars }
+    } else {
+      // Fallback to old structure
+      const coreDir = resolve(getModuleDir(), '../..')
+      const oldEnvPath = resolve(coreDir, `.env.${environment}`)
+
+      if (existsSync(oldEnvPath)) {
+        const content = readFileSync(oldEnvPath, 'utf-8')
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed || trimmed.startsWith('#')) {
+            continue
+          }
+          const [key, ...valueParts] = trimmed.split('=')
+          if (key && valueParts.length > 0) {
+            envVars[key] = valueParts.join('=')
+          }
+        }
+      }
+    }
+  } else {
+    // No active bot, try old structure
+    const coreDir = resolve(getModuleDir(), '../..')
+    const oldEnvPath = resolve(coreDir, `.env.${environment}`)
+
+    if (existsSync(oldEnvPath)) {
+      const content = readFileSync(oldEnvPath, 'utf-8')
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) {
+          continue
+        }
+        const [key, ...valueParts] = trimmed.split('=')
+        if (key && valueParts.length > 0) {
+          envVars[key] = valueParts.join('=')
+        }
+      }
+    }
+  }
+
+  const result = envSchema.safeParse(envVars)
 
   if (!result.success) {
     const errors = result.error.errors.map((e) => `  ${e.path.join('.')}: ${e.message}`).join('\n')
