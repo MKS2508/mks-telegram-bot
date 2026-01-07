@@ -359,17 +359,57 @@ export class BotFatherManager {
    * @returns Message or null if timeout
    */
   private waitForResponse(timeout: number): Promise<Message | null> {
+    return this.waitForNewResponse(timeout, null)
+  }
+
+  /**
+   * Wait for a NEW response from BotFather (ignoring messages with same ID)
+   * @param timeout Timeout in milliseconds
+   * @param lastMessageId ID of last message to ignore
+   * @returns Message or null if timeout
+   */
+  private waitForNewResponse(timeout: number, lastMessageId: number | null): Promise<Message | null> {
     return new Promise((resolve) => {
       // Check buffer first for any pending messages
       if (this.messageBuffer.length > 0) {
-        const message = this.messageBuffer.shift()!
-        console.log(`[DEBUG] Returning buffered message`)
-        resolve(message)
-        return
+        // Find first message with different ID
+        let message: Message | null = null
+        while (this.messageBuffer.length > 0) {
+          const msg = this.messageBuffer.shift()!
+          // @ts-ignore
+          const msgId = msg.message?.id
+
+          // If we have a lastMessageId, skip messages with same or older ID
+          if (lastMessageId && msgId && msgId <= lastMessageId) {
+            console.log(`[DEBUG] Skipping old message ID: ${msgId}`)
+            continue
+          }
+
+          message = msg
+          break
+        }
+
+        if (message) {
+          console.log(`[DEBUG] Returning buffered message`)
+          resolve(message)
+          return
+        }
       }
 
       // Set up the resolve function to be called by the message handler
-      this.resolveResponse = resolve
+      this.resolveResponse = (msg: Message) => {
+        // @ts-ignore
+        const msgId = msg.message?.id
+
+        // If we have a lastMessageId, ignore messages with same or older ID
+        if (lastMessageId && msgId && msgId <= lastMessageId) {
+          console.log(`[DEBUG] Ignoring old message ID: ${msgId}`)
+          // Don't resolve, wait for next message
+          return
+        }
+
+        resolve(msg)
+      }
 
       // Ensure listener is set up
       if (!this.messageHandlerRef) {
@@ -378,7 +418,7 @@ export class BotFatherManager {
 
       // Set timeout
       setTimeout(() => {
-        if (this.resolveResponse === resolve) {
+        if (this.resolveResponse) {
           this.resolveResponse = null
           console.log(`[DEBUG] Timeout waiting for BotFather response`)
           resolve(null)
@@ -719,7 +759,7 @@ export class BotFatherManager {
       const allBots: BotInfo[] = []
       let currentPage = 1
       let hasNextPage = true
-      let lastMessage: Message | null = null
+      let lastMessageId: number | null = null
 
       while (hasNextPage) {
         // Send /mybots if first page
@@ -727,19 +767,21 @@ export class BotFatherManager {
           await this.sendMessageToBotFather('/mybots')
           await this.sleep(2000)
         } else {
-          // For subsequent pages, wait longer for BotFather response
-          await this.sleep(3000)
+          // For subsequent pages, wait a bit for BotFather to process
+          await this.sleep(1000)
         }
 
-        // Get current page response (longer timeout for pagination)
-        const timeout = currentPage === 1 ? 10000 : 20000
-        const response = await this.waitForResponse(timeout)
+        // Get current page response (ignore old messages for pagination)
+        const timeout = currentPage === 1 ? 10000 : 10000
+        const response = await this.waitForNewResponse(timeout, lastMessageId)
         if (!response) {
           console.log(`[DEBUG] No response for page ${currentPage} (timeout: ${timeout}ms)`)
           break
         }
 
-        lastMessage = response
+        // @ts-ignore
+        lastMessageId = response.message?.id || null
+        console.log(`[DEBUG] Received message ID: ${lastMessageId}`)
 
         // Extract bots from this page
         const pageBots = this.parseBotsFromInlineKeyboard(response)
@@ -767,11 +809,6 @@ export class BotFatherManager {
             break
           }
 
-          // Clear message buffer after clicking to avoid old messages
-          this.clearMessageBuffer()
-
-          // Wait for BotFather to process and send new page
-          await this.sleep(3000)
           currentPage++
         } else {
           // No Next button - we're done
