@@ -345,6 +345,15 @@ export class BotFatherManager {
   }
 
   /**
+   * Clear message buffer (used after clicking pagination buttons)
+   */
+  private clearMessageBuffer(): void {
+    this.messageBuffer = []
+    this.resolveResponse = null
+    console.log('[DEBUG] Message buffer cleared')
+  }
+
+  /**
    * Wait for a response from BotFather with Promise
    * @param timeout Timeout in milliseconds
    * @returns Message or null if timeout
@@ -717,12 +726,16 @@ export class BotFatherManager {
         if (currentPage === 1) {
           await this.sendMessageToBotFather('/mybots')
           await this.sleep(2000)
+        } else {
+          // For subsequent pages, wait longer for BotFather response
+          await this.sleep(3000)
         }
 
-        // Get current page response
-        const response = await this.waitForResponse(10000)
+        // Get current page response (longer timeout for pagination)
+        const timeout = currentPage === 1 ? 10000 : 20000
+        const response = await this.waitForResponse(timeout)
         if (!response) {
-          console.log('[DEBUG] No response for page', currentPage)
+          console.log(`[DEBUG] No response for page ${currentPage} (timeout: ${timeout}ms)`)
           break
         }
 
@@ -753,7 +766,12 @@ export class BotFatherManager {
             console.log('[DEBUG] Failed to click Next button')
             break
           }
-          await this.sleep(2000)
+
+          // Clear message buffer after clicking to avoid old messages
+          this.clearMessageBuffer()
+
+          // Wait for BotFather to process and send new page
+          await this.sleep(3000)
           currentPage++
         } else {
           // No Next button - we're done
