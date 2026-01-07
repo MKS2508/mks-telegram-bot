@@ -1174,4 +1174,9 @@ function showFinalSummary(mode: SetupMode, environment: string): void {
   console.log(chalk.bold('Next Steps:'))
   steps[mode]?.forEach(step => console.log(`  ${step}`))
   console.log('')
+
+  // Suggest running doctor for verification
+  console.log(chalk.bold.cyan('💡 Pro Tip:'))
+  console.log(`  Run ${chalk.yellow('bun run doctor')} to verify your configuration before starting`)
+  console.log('')
 }

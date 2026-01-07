@@ -2,6 +2,21 @@
 
 Referencia completa de comandos CLI disponibles para gestionar el bot.
 
+## Flujo Recomendado
+
+```bash
+# 1. Setup del entorno (configura todo)
+bun run setup
+
+# 2. Doctor (verifica que todo esté correcto)
+bun run doctor
+
+# 3. Arrancar bot
+bun run dev
+```
+
+> **Setup → Doctor → Dev** es el flujo recomendado para cualquier cambio de configuración.
+
 ## Setup Command
 
 Configura el entorno del bot de forma interactiva.
@@ -38,11 +53,27 @@ bun run setup --token "123:ABC"
 
 ### Qué Hace
 
-1. **Copia** `.env.example` a `.env.{environment}`
-2. **Pregunta** por bot token, modo, y opciones
-3. **Valida** el token contra Telegram API
-4. **Configura** todos los campos necesarios
-5. **Muestra** próximos pasos
+1. **Detecta** contexto actual (qué existe, qué falta)
+2. **Pregunta** objetivo (new-bot, add-ids, create-topics, bootstrap, manual)
+3. **Ejecuta** pre-checks de validación
+4. **Configura** campos necesarios según modo seleccionado
+5. **Muestra** resumen de cambios
+6. **Sugiere** ejecutar `bun run doctor` para verificar
+
+### Siguiente Paso Recomendado
+
+Después de setup, **siempre ejecuta doctor**:
+
+```bash
+bun run doctor
+```
+
+Esto valida:
+- Token válido contra Telegram API
+- Variables de entorno configuradas
+- Dependencias instaladas
+- Puertos disponibles
+- Permisos de directorios
 
 ### Flujo Interactivo
 

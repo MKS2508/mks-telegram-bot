@@ -148,16 +148,31 @@ bun run bootstrap
 
 ## Paso 5: Verificar Configuración
 
+> **ALTAMENTE RECOMENDADO** después de setup
+
 ```bash
 bun run doctor
 ```
 
-Este comando diagnostica tu configuración:
+Este comando diagnostica tu configuración y valida que todo esté correcto:
 
-- ✓ Dependencias instaladas
-- ✓ Archivos .env configurados
-- ✓ Token de bot válido
-- ✓ Puertos disponibles
+### Checks que Realiza
+
+| Check | Descripción |
+| ----- | ----------- |
+| ✓ Node.js version | Versión >= 20 |
+| ✓ Bun installation | Bun está instalado |
+| ✓ Dependencies | Todas las dependencias instaladas |
+| ✓ Environment files | Archivos .env existen |
+| ✓ Environment variables | Variables requeridas seteadas |
+| ✓ Bot token validation | Token válido contra Telegram API |
+| ✓ Control commands | Configuración de comandos de control |
+| ✓ Temp directory | core/tmp es writable |
+| ✓ Logs directory | core/logs existe |
+| ✓ Port availability | Puerto 3000 disponible |
+| ✓ Git ignore | .env files excluidos de git |
+
+### Output Esperado
 
 Deberías ver:
 
@@ -263,7 +278,7 @@ bun install
 # 3. Configurar entorno (setup interactivo)
 bun run setup
 
-# 4. Verificar configuración
+# 4. Verificar configuración (recomendado)
 bun run doctor
 
 # 5. Arrancar en desarrollo
@@ -290,16 +305,20 @@ bun install
 # 4. Bootstrap automático (crea bot, grupo, topics)
 bun run bootstrap
 
-# 5. Arrancar en desarrollo
+# 5. Verificar configuración (recomendado)
+bun run doctor
+
+# 6. Arrancar en desarrollo
 bun run dev
 
-# 6. Probar en Telegram
+# 7. Probar en Telegram
 # Envía /start a tu bot
 ```
 
 > **¿Cuál usar?**
 > - **Bootstrap** - Si no has creado el bot todavía (~3-5 min total)
 > - **Manual** - Si ya tienes el token de @BotFather (~10-15 min total)
+> - **Siempre** ejecuta `bun run doctor` después del setup para verificar
 
 
 ## Referencias
