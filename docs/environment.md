@@ -58,6 +58,62 @@ TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 TG_MODE=polling
 ```
 
+## Variables MTProto (para Bootstrap)
+
+### `TG_API_ID`
+
+**Descripción**: API ID de Telegram para MTProto (obtenido de my.telegram.org)
+
+**Requerido para**: `bun run bootstrap` (comando de creación automática de bots)
+
+**Obtenerlo**:
+1. Ve a [https://my.telegram.org](https://my.telegram.org)
+2. Log in con tu número de teléfono
+3. Click en "API development tools"
+4. Llena el formulario (App title, Short name, Platform)
+5. Click "Create application"
+6. Copia el `api_id` (número entero)
+
+**Formato**: Número entero positivo
+
+**Ejemplo**:
+```bash
+TG_API_ID=12345678
+```
+
+### `TG_API_HASH`
+
+**Descripción**: API Hash de Telegram para MTProto (obtenido de my.telegram.org)
+
+**Requerido para**: `bun run bootstrap` (comando de creación automática de bots)
+
+**Formato**: String de 32+ caracteres
+
+**Ejemplo**:
+```bash
+TG_API_HASH=abc123def456789abc123def456789ab
+```
+
+> **IMPORTANTE**: Estas credenciales son diferentes del bot token.
+> - **Bot Token** (TG_BOT_TOKEN): Para Bot API, usado en runtime
+> - **MTProto Credentials** (TG_API_ID/TG_API_HASH): Para crear bots automáticamente vía @BotFather
+
+**Uso en Bootstrap**:
+```bash
+# Con credenciales en .env, bootstrap no te las pedirá
+bun run bootstrap
+
+# Sin credenciales, bootstrap te pedirá que las ingreses
+bun run bootstrap
+# → Enter your API ID: ********
+# → Enter your API Hash: ************************************
+```
+
+**Seguridad**:
+- Guarda estas credenciales en tu `.env` (nunca en el repo)
+- Son menos sensibles que el bot token, pero aún así privadas
+- Permiten que el bootstrainer automatice la creación de bots
+
 ## Variables Webhook (si TG_MODE=webhook)
 
 ### `TG_WEBHOOK_URL`
@@ -412,6 +468,10 @@ kubectl create secret generic bot-secrets --from-literal=TG_BOT_TOKEN=xxx
 TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 TG_MODE=polling
 TG_ENV=local
+
+# MTProto (opcional - para comando bootstrap)
+# TG_API_ID=12345678
+# TG_API_HASH=abc123def456789...
 
 # Logging
 LOG_LEVEL=debug

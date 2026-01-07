@@ -1,6 +1,7 @@
 import type { Context } from 'telegraf'
 import { getConfig } from '../config/index.js'
-import { formatHealthMessage } from '../utils/formatters.js'
+import { formatHealthMessage, formatUptime } from '../utils/formatters.js'
+import { MessageBuilder } from '../utils/message-builder.js'
 import { healthLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 
 export async function handleHealth(ctx: Context): Promise<void> {
@@ -39,18 +40,12 @@ export async function handleUptime(ctx: Context): Promise<void> {
   )
 
   const uptime = Date.now() - (Date.now() - 10000)
-  const days = Math.floor(uptime / 86400000)
-  const hours = Math.floor((uptime % 86400000) / 3600000)
-  const minutes = Math.floor((uptime % 3600000) / 60000)
-  const seconds = Math.floor((uptime % 60000) / 1000)
 
-  let formatted = ''
-  if (days > 0) formatted += `${days}d `
-  if (hours > 0) formatted += `${hours}h `
-  if (minutes > 0) formatted += `${minutes}m `
-  formatted += `${seconds}s`
+  const builder = MessageBuilder.markdown()
+    .title('⏱️ Uptime:')
+    .text(formatUptime(uptime))
 
-  await ctx.reply(`⏱️ *Uptime:*\n${formatted}`, { parse_mode: 'Markdown' })
+  await ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
 }
 
 export async function handleStats(ctx: Context): Promise<void> {
@@ -65,19 +60,19 @@ export async function handleStats(ctx: Context): Promise<void> {
 
   const config = getConfig()
 
-  const message = `📊 *Bot Statistics*
+  const builder = MessageBuilder.markdown()
+    .title('📊 Bot Statistics')
+    .newline()
+    .section('Performance')
+    .line('Messages Processed', '0')
+    .line('Commands Executed', '0')
+    .line('Errors Encountered', '0')
+    .newline()
+    .section('Configuration')
+    .line('Mode', config.mode.toUpperCase())
+    .line('Log Level', config.logLevel.toUpperCase())
+    .line('Logging Enabled', config.logChatId ? '✅' : '❌')
+    .line('Control Enabled', config.controlChatId ? '✅' : '❌')
 
-*Performance:*
-Messages Processed: 0
-Commands Executed: 0
-Errors Encountered: 0
-
-*Configuration:*
-Mode: ${config.mode.toUpperCase()}
-Log Level: ${config.logLevel.toUpperCase()}
-Logging Enabled: ${config.logChatId ? '✅' : '❌'}
-Control Enabled: ${config.controlChatId ? '✅' : '❌'}
-  `
-
-  await ctx.reply(message, { parse_mode: 'Markdown' })
+  await ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
 }

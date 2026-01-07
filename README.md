@@ -40,7 +40,19 @@ bun run setup
 El comando `setup` te preguntará:
 - Bot token (pega el token de @BotFather)
 - Modo (polling para desarrollo)
-- Chat IDs opcionales
+- Comandos de control (requiere tu User ID - ver abajo cómo obtenerlo)
+
+#### Obtener tu Telegram User ID
+
+Antes de ejecutar setup, obtén tu User ID:
+
+1. **Opción 1**: Enviar `/getinfo` al bot después de arrancarlo
+2. **Opción 2**: Hablar con [@userinfobot](https://t.me/userinfobot) en Telegram
+
+El comando `/getinfo` mostrará:
+- Tu User ID (para `TG_AUTHORIZED_USER_IDS`)
+- Chat ID (para `TG_CONTROL_CHAT_ID`)
+- Topic ID (si estás en un topic)
 
 ### 3. Arrancar en Desarrollo
 
@@ -171,6 +183,7 @@ Tres destinos de logging usando Better Logger 4.0.0:
 - `/health` - Health check
 - `/uptime` - Uptime info
 - `/stats` - Statistics
+- `/getinfo` - Get your User ID, Chat ID, and Topic ID for configuration
 - `/logs` - Log streaming status
 
 **Control Commands** (requieren autorización):
@@ -178,6 +191,47 @@ Tres destinos de logging usando Better Logger 4.0.0:
 - `/restart` - Restart con stats reset
 - `/mode` - Switch polling/webhook
 - `/webhook` - Webhook configuration
+
+### Organización con Topics
+
+El bot soporta **Forum Topics** para mantener el chat organizado. Puedes crear topics específicos para diferentes propósitos:
+
+**Topics Recomendados:**
+```
+📊 General     - Chat general, comandos públicos
+🤖 Control     - Comandos de control (/stop, /restart, /mode)
+📋 Logs        - Streaming de logs del bot
+⚙️ Config      - Discusiones de configuración
+🐛 Bugs        - Reporte de bugs
+```
+
+**Configuración por Topic:**
+
+1. **Control en topic específico:**
+   - Crea un topic llamado "Control" en tu grupo
+   - Envia `/getinfo` dentro de ese topic
+   - Copia el `TG_CONTROL_TOPIC_ID` a tu `.env`
+   - Los comandos de control solo funcionarán en ese topic
+
+2. **Logs en topic específico:**
+   - Crea un topic llamado "Logs"
+   - Configura `TG_LOG_CHAT_ID` y `TG_LOG_TOPIC_ID`
+   - Los logs del bot se enviarán a ese topic
+
+3. **Menciones del bot:**
+   - El bot responde a `@bot_username` en cualquier topic
+   - Útil para obtener info rápida sin comandos
+
+**Ejemplo de configuración completa:**
+```bash
+# .env.local
+TG_AUTHORIZED_USER_IDS=123456789
+TG_CONTROL_CHAT_ID=-1001234567890
+TG_CONTROL_TOPIC_ID=12345       # Solo comandos de control en este topic
+
+TG_LOG_CHAT_ID=-1001234567890
+TG_LOG_TOPIC_ID=67890           # Logs van a este topic
+```
 
 ## Development Workflow
 

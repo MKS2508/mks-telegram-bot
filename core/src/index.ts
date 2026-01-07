@@ -6,8 +6,10 @@ import { botLogger, kv, badge, colorText, colors } from './middleware/logging.js
 import { botManager } from './utils/bot-manager.js'
 import { getInstanceManager } from './utils/instance-manager.js'
 import { handleHealth, handleUptime, handleStats } from './handlers/health.js'
+import { handleGetInfo } from './handlers/info.js'
 import { handleStop, handleRestart, handleMode, handleWebhook } from './handlers/control.js'
 import { handleLogsCommand, initializeLogStreamer } from './handlers/logs.js'
+import { handleExportConfig } from './handlers/config-export.js'
 import { auth } from './middleware/auth.js'
 import { initializeFileLogging } from './config/logging.js'
 
@@ -72,10 +74,37 @@ async function main(): Promise<void> {
         '/uptime - Show bot uptime\n' +
         '/stats - Show statistics\n' +
         '/logs - Check log streaming status\n' +
+        '/getinfo - Get your user/chat info for configuration\n' +
         '/mode - Check or change bot mode',
       { parse_mode: 'Markdown' }
     )
     botManager.incrementMessages()
+  })
+
+  bot.command('getinfo', handleGetInfo)
+  bot.command('exportconfig', handleExportConfig)
+
+  // Listen for bot mentions in groups
+  bot.use(async (ctx, next) => {
+    const botUsername = ctx.me
+    if (!botUsername) return next()
+
+    const msg = ctx.message
+    if (!msg || !('text' in msg) || !msg.text) return next()
+
+    // Check if bot is mentioned
+    const mention = `@${botUsername}`
+    if (msg.text.includes(mention)) {
+      botLogger.info(
+        `${badge('MENTION', 'rounded')} ${kv({
+          user: colorText(String(ctx.from?.id), colors.user),
+          chat: ctx.chat?.id,
+        })}`
+      )
+      await handleGetInfo(ctx)
+    } else {
+      return next()
+    }
   })
 
   bot.command('health', handleHealth)

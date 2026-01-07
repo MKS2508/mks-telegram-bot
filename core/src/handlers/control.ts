@@ -2,6 +2,7 @@ import type { Context } from 'telegraf'
 import { updateConfig, getConfig } from '../config/index.js'
 import { botLogger, controlLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { botManager } from '../utils/bot-manager.js'
+import { MessageBuilder } from '../utils/message-builder.js'
 
 export async function handleStop(ctx: Context): Promise<void> {
   const userId = ctx.from?.id ?? 'unknown'
@@ -13,7 +14,8 @@ export async function handleStop(ctx: Context): Promise<void> {
     })}`
   )
 
-  ctx.reply('🛑 Shutting down bot...')
+  const message = MessageBuilder.markdown().text('🛑 Shutting down bot...').build()
+  ctx.reply(message, { parse_mode: 'Markdown' })
   process.exit(0)
 }
 
@@ -27,9 +29,15 @@ export async function handleRestart(ctx: Context): Promise<void> {
     })}`
   )
 
-  ctx.reply('🔄 Restarting bot...')
+  const builder1 = MessageBuilder.markdown()
+  builder1.text('🔄 Restarting bot...')
+  ctx.reply(builder1.build(), { parse_mode: builder1.getParseMode() })
+
   botManager.resetStats()
-  ctx.reply('✅ Bot stats reset. Restarting...')
+
+  const builder2 = MessageBuilder.markdown()
+  builder2.text('✅ Bot stats reset. Restarting...')
+  ctx.reply(builder2.build(), { parse_mode: builder2.getParseMode() })
   process.exit(0)
 }
 
@@ -40,22 +48,34 @@ export async function handleMode(ctx: Context): Promise<void> {
 
   if (!mode || (mode !== 'polling' && mode !== 'webhook')) {
     const config = getConfig()
-    ctx.reply(`📡 *Current Mode:* \`${config.mode}\`\n\nUsage: /mode <polling|webhook>`, {
-      parse_mode: 'Markdown',
-    })
+    const builder = MessageBuilder.markdown()
+      .title('📡 Current Mode:')
+      .newline()
+      .line('Mode', config.mode, { code: true })
+      .newline()
+      .text('Usage: /mode <polling|webhook>')
+
+    ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
     return
   }
 
   if (mode === 'webhook') {
     const config = getConfig()
     if (!config.webhookUrl) {
-      ctx.reply('❌ Webhook URL not configured. Set TG_WEBHOOK_URL environment variable.')
+      const builder = MessageBuilder.markdown()
+        .text('❌ Webhook URL not configured. Set TG_WEBHOOK_URL environment variable.')
+      ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
       return
     }
   }
 
   updateConfig({ mode })
-  ctx.reply(`✅ Mode changed to: \`${mode}\``, { parse_mode: 'Markdown' })
+
+  const builder = MessageBuilder.markdown()
+    .text('✅ Mode changed to:')
+    .line('Mode', mode, { code: true })
+
+  ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
 
   controlLogger.info(
     `${badge('MODE', 'rounded')} ${kv({
@@ -69,12 +89,18 @@ export async function handleWebhook(ctx: Context): Promise<void> {
   const config = getConfig()
 
   if (config.mode !== 'webhook') {
-    ctx.reply('❌ Bot is not in webhook mode. Use /mode webhook first.')
+    const builder = MessageBuilder.markdown()
+      .text('❌ Bot is not in webhook mode. Use /mode webhook first.')
+    ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
     return
   }
 
-  const message = `🔗 *Webhook Configuration:*\n\nURL: \`${config.webhookUrl || 'Not set'}\``
-  ctx.reply(message, { parse_mode: 'Markdown' })
+  const builder = MessageBuilder.markdown()
+    .title('🔗 Webhook Configuration:')
+    .newline()
+    .line('URL', config.webhookUrl || 'Not set', { code: true })
+
+  ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
 
   controlLogger.info(
     `${badge('WEBHOOK', 'rounded')} ${kv({

@@ -55,6 +55,7 @@ async function handleDoctor(): Promise<void> {
   checks.push(await checkEnvFile())
   checks.push(await checkRequiredEnvVars())
   checks.push(await checkBotToken())
+  checks.push(await checkControlCommands())
   checks.push(await checkTmpDirectory())
   checks.push(await checkLogsDirectory())
   checks.push(await checkPorts())
@@ -298,6 +299,67 @@ async function checkBotToken(): Promise<CheckResult> {
       name: 'Bot token validation',
       status: 'warn',
       message: 'Could not read bot token',
+    }
+  }
+}
+
+async function checkControlCommands(): Promise<CheckResult> {
+  const envPath = join(process.cwd(), 'core', '.env.local')
+
+  if (!existsSync(envPath)) {
+    return {
+      name: 'Control commands',
+      status: 'warn',
+      message: 'No .env.local file found',
+    }
+  }
+
+  try {
+    const content = await readFile(envPath, 'utf-8')
+    const hasControlChatId = content.includes('TG_CONTROL_CHAT_ID=') && !content.includes('TG_CONTROL_CHAT_ID=#')
+
+    if (hasControlChatId) {
+      const match = content.match(/TG_CONTROL_CHAT_ID=([^\n]+)/)
+      const chatId = match?.[1]?.trim()
+
+      if (!chatId || chatId === 'your_control_chat_id_here' || chatId.startsWith('#')) {
+        return {
+          name: 'Control commands',
+          status: 'warn',
+          message: 'Control chat ID not configured',
+          details: 'Control commands (/stop, /restart) are disabled. Run: bun run setup',
+        }
+      }
+
+      const hasAuthorizedUsers = content.includes('TG_AUTHORIZED_USER_IDS=')
+
+      if (!hasAuthorizedUsers) {
+        return {
+          name: 'Control commands',
+          status: 'warn',
+          message: 'Control enabled but no authorized users',
+          details: 'Add TG_AUTHORIZED_USER_IDS to .env.local',
+        }
+      }
+
+      return {
+        name: 'Control commands',
+        status: 'pass',
+        message: 'Control commands enabled',
+      }
+    }
+
+    return {
+      name: 'Control commands',
+      status: 'warn',
+      message: 'Control commands disabled',
+      details: 'Enable with TG_CONTROL_CHAT_ID. Run: bun run setup',
+    }
+  } catch {
+    return {
+      name: 'Control commands',
+      status: 'warn',
+      message: 'Could not read .env.local',
     }
   }
 }

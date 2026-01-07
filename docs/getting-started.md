@@ -18,7 +18,11 @@ bun --version
 
 ## Paso 1: Crear el Bot en Telegram
 
-### Hablar con @BotFather
+> **OPCIÓN RECOMENDADA: Bootstrap Automático**
+>
+> Si quieres automatizar TODO el proceso (crear bot, grupo, topics), salta a [Paso 4: Bootstrap Automático](#paso-4-bootstrap-automtico).
+
+### Hablar con @BotFather (Método Manual)
 
 1. Abre Telegram y busca **@BotFather**
 2. Inicia el chat con el comando `/newbot`
@@ -90,6 +94,57 @@ TG_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 TG_MODE=polling
 TG_ENV=local
 ```
+
+### Opción Automática: Bootstrap Completo
+
+> **"BotFather Personal"** - Automatiza TODO el proceso de creación
+
+Si no has creado el bot todavía, puedes usar `bootstrap` para:
+
+1. **Crear el bot automáticamente** vía @BotFather
+2. **Crear un grupo/forum** para el bot
+3. **Añadir el bot como admin** del grupo
+4. **Crear topics** automáticamente (General, Control, Logs, Config, Bugs)
+5. **Configurar todos los IDs** en el `.env`
+
+```bash
+# Requiere credenciales MTProto API (ver abajo)
+bun run bootstrap
+```
+
+<details>
+<summary>💡 ¿Cómo obtener credenciales MTProto API?</summary>
+
+1. Ve a [https://my.telegram.org](https://my.telegram.org)
+2. Log in con tu número de teléfono
+3. Click en "API development tools"
+4. Llena el formulario:
+   - **App title**: My Bot App
+   - **Short name**: mybotapp
+   - **Platform**: Desktop o Web
+5. Click "Create application"
+6. Copia el `api_id` y `api_hash`
+
+> Puedes guardar estas credenciales en tu `.env` para evitar re-pedirlas:
+> ```bash
+> # MTProto API Credentials (for bootstrap command)
+> TG_API_ID=12345678
+> TG_API_HASH=abc123def456789...
+> ```
+
+</details>
+
+**Ventajas del Bootstrap:**
+
+| Feature | Bootstrap | Manual |
+|---------|-----------|--------|
+| Tiempo total | ~3-5 minutos | ~10-15 minutos |
+| Creación de bot | Automático | Hablar con @BotFather |
+| Creación de grupo | Automático | Manual en Telegram |
+| Creación de topics | Automática | Manual o comando separado |
+| IDs detection | Automático | Requiere auto-configure |
+
+> **Ver documentación completa**: [CLI Commands - Bootstrap](./cli-commands.md#bootstrap-command)
 
 ## Paso 5: Verificar Configuración
 
@@ -195,6 +250,8 @@ Ver [Troubleshooting](./troubleshooting.mdx) para más detalles.
 
 ## Resumen Rápido
 
+### Flujo Manual (con bot ya creado)
+
 ```bash
 # 1. Clonar el template
 git clone <repo>
@@ -215,6 +272,35 @@ bun run dev
 # 6. Probar en Telegram
 # Envía /start a tu bot
 ```
+
+### Flujo Automático (Bootstrap)
+
+```bash
+# 1. Clonar el template
+git clone <repo>
+cd mks-telegram-bot
+
+# 2. Instalar dependencias
+bun install
+
+# 3. Obtener credenciales MTProto (my.telegram.org)
+# TG_API_ID=12345678
+# TG_API_HASH=abc123def456789...
+
+# 4. Bootstrap automático (crea bot, grupo, topics)
+bun run bootstrap
+
+# 5. Arrancar en desarrollo
+bun run dev
+
+# 6. Probar en Telegram
+# Envía /start a tu bot
+```
+
+> **¿Cuál usar?**
+> - **Bootstrap** - Si no has creado el bot todavía (~3-5 min total)
+> - **Manual** - Si ya tienes el token de @BotFather (~10-15 min total)
+
 
 ## Referencias
 

@@ -2,6 +2,7 @@ import type { Context, Telegraf } from 'telegraf'
 import { getConfig, hasLoggingConfigured } from '../config/index.js'
 import { streamLogger, botLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { formatLogEntry } from '../utils/formatters.js'
+import { MessageBuilder } from '../utils/message-builder.js'
 
 const LOG_BUFFER_SIZE = 10
 const LOG_BUFFER_TIMEOUT = 5000
@@ -102,7 +103,9 @@ export async function handleLogsCommand(ctx: Context): Promise<void> {
   const config = getConfig()
 
   if (!hasLoggingConfigured()) {
-    await ctx.reply('❌ Logging is not configured. Set TG_LOG_CHAT_ID environment variable.')
+    const builder = MessageBuilder.markdown()
+      .text('❌ Logging is not configured. Set TG_LOG_CHAT_ID environment variable.')
+    ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
     return
   }
 
@@ -117,10 +120,14 @@ export async function handleLogsCommand(ctx: Context): Promise<void> {
     })}`
   )
 
-  await ctx.reply(
-    `📝 *Log Streaming Status:* \`${status}\`\n\nChat ID: \`${config.logChatId}\`${
-      config.logTopicId ? `\nTopic ID: \`${config.logTopicId}\`` : ''
-    }`,
-    { parse_mode: 'Markdown' }
-  )
+  const builder = MessageBuilder.markdown()
+    .title('📝 Log Streaming Status:')
+    .newline()
+    .line('Status', status, { code: true })
+    .line('Chat ID', String(config.logChatId), { code: true })
+  if (config.logTopicId) {
+    builder.line('Topic ID', String(config.logTopicId), { code: true })
+  }
+
+  ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
 }

@@ -1,0 +1,29 @@
+{
+  "name": "@mks2508/bootstrapper",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Telegram bot bootstrap utilities for automated provisioning",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "telegram": "^2.26.22",
+    "telegraf": "^4.16.3",
+    "@inquirer/prompts": "^8.1.0",
+    "big-integer": "^1.6.52"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

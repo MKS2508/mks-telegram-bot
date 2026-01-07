@@ -1,6 +1,9 @@
 import { writeFile, readFile, unlink } from 'fs/promises'
 import { existsSync as existsSyncSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 import type { BotConfig } from '../types/bot.js'
 import { botLogger, badge, kv, colorText, colors } from '../middleware/logging.js'
 import { ok, type Result, err } from './result.js'
@@ -31,7 +34,8 @@ export class InstanceManager {
     this.instanceId = config.instanceId || this.generateInstanceId()
     this.lockBackend = config.lockBackend || 'pid'
 
-    const tmpDir = resolve('./core/tmp')
+    // tmp is at core/tmp relative to this file (core/src/utils)
+    const tmpDir = resolve(__dirname, '../../tmp')
     this.pidFile = resolve(tmpDir, `${config.instanceName}.pid`)
     this.lockFile = resolve(tmpDir, `${config.instanceName}.lock`)
   }

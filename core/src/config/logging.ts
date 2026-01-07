@@ -13,7 +13,7 @@ export interface FileLoggingConfig {
   logDir: string
   maxFileSize: number
   maxFiles: number
-  fileLogLevels: ('debug' | 'info' | 'warn' | 'error' | 'critical')[]
+  fileLogLevels: ('debug' | 'info' | 'success' | 'warn' | 'error' | 'critical')[]
 }
 
 const DEFAULT_CONFIG: FileLoggingConfig = {
@@ -22,7 +22,9 @@ const DEFAULT_CONFIG: FileLoggingConfig = {
   maxFileSize: Number(process.env.TG_LOG_MAX_SIZE) || 1024 * 1024, // 1MB default
   maxFiles: Number(process.env.TG_LOG_MAX_FILES) || 5,
   fileLogLevels: (process.env.TG_LOG_LEVELS?.split(',') || [
+    'debug',
     'info',
+    'success',
     'warn',
     'error',
     'critical',
