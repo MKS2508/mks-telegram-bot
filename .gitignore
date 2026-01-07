@@ -5,6 +5,13 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Compiled JavaScript and declaration files
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+!tools/cli/**/*.js
+
 # Environment
 .env
 .env.local
@@ -39,3 +46,6 @@ coverage/
 # Instance lock files
 core/tmp/*.pid
 core/tmp/*.lock
+
+# Other projects and repositories
+mks-bun-monorepo/
