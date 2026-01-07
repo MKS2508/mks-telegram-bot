@@ -123,17 +123,15 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
       spinner.succeed('API credentials saved to .env')
     }
 
-    spinner.text = 'Connecting to Telegram...'
-    spinner.start()
-
-    // Ensure authorized
+    // Ensure authorized (may prompt for phone/code/2FA)
+    // Note: This step is interactive and will show its own prompts
     const isAuthorized = await client.ensureAuthorized()
     if (!isAuthorized) {
-      spinner.fail('Authorization failed')
+      cliLogger.error('Authorization failed')
       return
     }
 
-    spinner.succeed('Connected to Telegram')
+    cliLogger.success('Connected to Telegram')
 
     // Get bot info
     const botName = options.botName ?? await input({ message: 'Enter bot display name:' })
