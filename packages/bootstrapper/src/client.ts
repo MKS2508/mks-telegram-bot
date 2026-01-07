@@ -96,77 +96,69 @@ export class BootstrapClient {
     console.log('Enter your phone number with country code.')
     console.log('Example: +34612345678 (Spain) or +12025551234 (USA)\n')
 
-    // Get phone number
-    const phoneNumber = await input({
-      message: 'Enter your phone number:',
-      validate: (value: string) => {
-        if (!value || value.trim().length === 0) {
-          return 'Phone number is required'
-        }
-        if (!value.startsWith('+')) {
-          return 'Phone number must start with + (country code)'
-        }
-        return true
-      },
-    })
-
     try {
-      console.log('\n⏳ Sending verification code...')
-      console.log('Check your Telegram app for the code.\n')
+      // Use GramJS client.start() with callbacks (official method)
+      await this.client.start({
+        phoneNumber: async () => {
+          const phone = await input({
+            message: 'Enter your phone number:',
+            validate: (value: string) => {
+              if (!value || value.trim().length === 0) {
+                return 'Phone number is required'
+              }
+              if (!value.startsWith('+')) {
+                return 'Phone number must start with + (country code)'
+              }
+              return true
+            },
+          })
+          console.log('\n⏳ Sending verification code...')
+          console.log('Check your Telegram app for the code.\n')
+          return phone
+        },
+        phoneCode: async () => {
+          console.log('📝 STEP 2: Verification Code')
+          console.log('Enter the code you received in Telegram.')
+          console.log('The code is 5-7 digits long.\n')
 
-      // Send code
-      await this.client.sendCode(
-        { apiId: this.client.apiId, apiHash: this.client.apiHash },
-        phoneNumber
-      )
+          const code = await input({
+            message: 'Enter the code:',
+            validate: (value: string) => {
+              if (!value || value.trim().length === 0) {
+                return 'Code is required'
+              }
+              if (!/^\d{5,7}$/.test(value.trim())) {
+                return 'Code must be 5-7 digits'
+              }
+              return true
+            },
+          })
+          console.log('\n⏳ Verifying code...')
+          return code
+        },
+        password: async () => {
+          console.log('📝 STEP 3: Two-Factor Authentication (2FA)')
+          console.log('You have Cloud Password enabled.')
+          console.log('Enter your password to continue.\n')
 
-      console.log('📝 STEP 2: Verification Code')
-      console.log('Enter the code you received in Telegram.')
-      console.log('The code is 5-7 digits long.\n')
-
-      // Get code from user
-      const code = await input({
-        message: 'Enter the code:',
-        validate: (value: string) => {
-          if (!value || value.trim().length === 0) {
-            return 'Code is required'
-          }
-          if (!/^\d{5,7}$/.test(value.trim())) {
-            return 'Code must be 5-7 digits'
-          }
-          return true
+          const password = await input({
+            message: 'Enter your 2FA password:',
+            validate: (value: string) => {
+              if (!value || value.trim().length === 0) {
+                return 'Password is required'
+              }
+              return true
+            },
+          })
+          console.log('\n⏳ Verifying password...')
+          return password
+        },
+        onError: (err: Error) => {
+          console.error('\n❌ Error:', err.message)
         },
       })
 
-      console.log('\n⏳ Verifying code...')
-
-      // Sign in with the code
-      // @ts-ignore - signIn method exists but types might be incorrect
-      await (this.client as any).signIn(phoneNumber, { code: code.trim() })
-
-      console.log('✅ Code verified!')
-
-      // Check for 2FA
-      const hasPassword = await (this.client as any).checkPassword(phoneNumber)
-      if (hasPassword) {
-        console.log('\n📝 STEP 3: Two-Factor Authentication (2FA)')
-        console.log('You have Cloud Password enabled.')
-        console.log('Enter your password to continue.\n')
-
-        const password = await input({
-          message: 'Enter your 2FA password:',
-          validate: (value: string) => {
-            if (!value || value.trim().length === 0) {
-              return 'Password is required'
-            }
-            return true
-          },
-        })
-
-        console.log('\n⏳ Verifying password...')
-        await (this.client as any).signInWithPassword(phoneNumber, { password: password.trim() })
-        console.log('✅ Password verified!')
-      }
+      console.log('\n✅ Code verified!')
 
       // Save session
       console.log('\n💾 Saving session...')
