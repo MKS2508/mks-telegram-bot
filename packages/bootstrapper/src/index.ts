@@ -22,3 +22,15 @@ export type {
   ConfiguredBot,
   MigrationResult,
 } from './env-manager.js'
+
+export { BootstrapState } from './bootstrap-state.js'
+export type {
+  ExistingBotConfig,
+  BotSelection,
+  GroupInfo,
+  GroupSelection,
+  TopicInfo,
+  TopicsSelection,
+  BootstrapSessionState,
+  BootstrapStep,
+} from './bootstrap-state.js'
