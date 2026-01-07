@@ -409,8 +409,15 @@ export class BotFatherManager {
       const responseText = this.extractMessageText(response)
       console.log(`[DEBUG] BotFather /mybots response: "${responseText}"`)
 
-      // Parse the bot list from response
-      const bots = this.parseBotList(responseText)
+      // Try parsing from inline keyboard buttons first (when response is "Choose a bot from the list below:")
+      let bots = this.parseBotsFromInlineKeyboard(response)
+
+      // If no bots found in buttons, try parsing from text
+      if (bots.length === 0) {
+        bots = this.parseBotList(responseText)
+      }
+
+      console.log(`[DEBUG] Found ${bots.length} bots`)
 
       // Clean up
       this.removeMessageListener()
@@ -533,6 +540,66 @@ export class BotFatherManager {
       this.removeMessageListener()
       return false
     }
+  }
+
+  /**
+   * Parse bot list from inline keyboard buttons (when BotFather sends interactive buttons)
+   * @param message Message object from BotFather
+   * @returns Array of bot info
+   */
+  private parseBotsFromInlineKeyboard(message: Message): BotInfo[] {
+    const bots: BotInfo[] = []
+
+    try {
+      // @ts-ignore - accessing GramJS internal structure
+      const msg = message.message
+
+      // @ts-ignore - replyMarkup contains inline keyboard
+      if (!msg?.replyMarkup?.rows) {
+        return bots
+      }
+
+      // @ts-ignore
+      const rows = msg.replyMarkup.rows
+
+      console.log(`[DEBUG] Found ${rows.length} button rows`)
+
+      // Extract buttons from each row
+      for (const row of rows) {
+        // @ts-ignore
+        if (!row.buttons) continue
+
+        // @ts-ignore
+        for (const button of row.buttons) {
+          // @ts-ignore - button.text contains the bot display text
+          const buttonText = button.text
+
+          // BotFather button format is usually: "BotName (@usernamebot)" or "@usernamebot"
+          // Parse username from button text
+          const usernameMatch = buttonText.match(/\(([A-Za-z0-9_]+bot)\)/) || buttonText.match(/@([A-Za-z0-9_]+bot)/)
+
+          if (usernameMatch) {
+            const username = usernameMatch[1]
+            // Extract name (text before @ or parentheses)
+            const name = buttonText
+              .replace(/\s*\([A-Za-z0-9_]+bot\)/, '')
+              .replace(/@[A-Za-z0-9_]+bot/, '')
+              .trim()
+
+            bots.push({ username, name: name || username })
+            console.log(`[DEBUG] Extracted bot from button: ${username} - ${name}`)
+          } else if (buttonText.endsWith('bot')) {
+            // Fallback: if button text is just username
+            bots.push({ username: buttonText, name: buttonText })
+            console.log(`[DEBUG] Extracted bot from button (fallback): ${buttonText}`)
+          }
+        }
+      }
+    } catch (error) {
+      console.log('[DEBUG] Error parsing inline keyboard:', error)
+    }
+
+    return bots
   }
 
   /**
