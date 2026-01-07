@@ -737,25 +737,71 @@ async function handleListBots(options: BootstrapOptions): Promise<void> {
 
   cliLogger.title(shouldImport ? '📋 Import Bots from BotFather' : '📋 Available Bots')
 
-  // Get API credentials
-  const apiId = await input({
-    message: 'Enter your API ID:',
-    validate: (value: string) => {
-      const num = parseInt(value, 10)
-      if (isNaN(num)) return 'API ID must be a number'
-      return true
-    },
-  })
+  // Try to get API credentials from existing .env files
+  const environment = (options.environment ?? 'local') as Environment
+  const envFile = resolve(process.cwd(), 'core', `.env.${environment}`)
+  const envManager = new EnvManager()
 
-  const apiHash = await input({
-    message: 'Enter your API Hash:',
-    validate: (value: string) => {
-      if (!value || value.trim().length < 32) {
-        return 'API Hash seems too short (should be 32+ characters)'
+  let apiId: string | undefined
+  let apiHash: string | undefined
+
+  // First, try to read from legacy .env.{environment} file
+  if (existsSync(envFile)) {
+    const envContent = await readFile(envFile, 'utf-8')
+    const apiIdMatch = envContent.match(/^TG_API_ID=(.+)$/m)
+    const apiHashMatch = envContent.match(/^TG_API_HASH=(.+)$/m)
+    apiId = apiIdMatch?.[1]?.trim()
+    apiHash = apiHashMatch?.[1]?.trim()
+  }
+
+  // If not found in legacy file, try to get from active bot
+  if (!apiId || !apiHash) {
+    const activeBot = envManager.getActiveBot()
+    if (activeBot) {
+      const botEnvFile = resolve(process.cwd(), 'core', '.envs', activeBot, `${environment}.env`)
+      if (existsSync(botEnvFile)) {
+        const envContent = await readFile(botEnvFile, 'utf-8')
+        const apiIdMatch = envContent.match(/^TG_API_ID=(.+)$/m)
+        const apiHashMatch = envContent.match(/^TG_API_HASH=(.+)$/m)
+        apiId = apiIdMatch?.[1]?.trim()
+        apiHash = apiHashMatch?.[1]?.trim()
       }
-      return true
-    },
-  })
+    }
+  }
+
+  // If credentials found in env, use them; otherwise prompt user
+  let finalApiId: number
+  let finalApiHash: string
+
+  if (apiId && apiHash) {
+    cliLogger.success('Found API credentials in environment file')
+    finalApiId = parseInt(apiId, 10)
+    finalApiHash = apiHash
+  } else {
+    cliLogger.info('API credentials not found in environment files')
+    // Get API credentials from user
+    const inputApiId = await input({
+      message: 'Enter your API ID:',
+      validate: (value: string) => {
+        const num = parseInt(value, 10)
+        if (isNaN(num)) return 'API ID must be a number'
+        return true
+      },
+    })
+
+    const inputApiHash = await input({
+      message: 'Enter your API Hash:',
+      validate: (value: string) => {
+        if (!value || value.trim().length < 32) {
+          return 'API Hash seems too short (should be 32+ characters)'
+        }
+        return true
+      },
+    })
+
+    finalApiId = parseInt(inputApiId, 10)
+    finalApiHash = inputApiHash.trim()
+  }
 
   const spinner = ora({ color: 'cyan' })
   spinner.text = 'Connecting to Telegram...'
@@ -763,8 +809,8 @@ async function handleListBots(options: BootstrapOptions): Promise<void> {
 
   try {
     const client = new BootstrapClient({
-      apiId: parseInt(apiId, 10),
-      apiHash: apiHash.trim(),
+      apiId: finalApiId,
+      apiHash: finalApiHash,
     })
 
     const isAuthorized = await client.ensureAuthorized()
