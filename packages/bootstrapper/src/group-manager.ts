@@ -49,13 +49,17 @@ export class GroupManager {
     try {
       const { Api } = await import('telegram/tl/index.js')
 
+      // DEBUG: Log what we got
+      console.log('[DEBUG] Api object keys:', Object.keys(Api || {}))
+      console.log('[DEBUG] Api.channels:', Api.channels)
+
       // Create channel with forum mode
       // @ts-ignore - CreateChannel exists but type might be different
-      const result = await tgClient.invoke(new Api.Channels.CreateChannel({
+      const result = await tgClient.invoke(new Api.channels.CreateChannel({
         title: options.title,
         about: options.description || '',
         megagroup: true,
-        forForum: options.forumMode ?? true,
+        forum: options.forumMode ?? true,
       }))
 
       // Extract chat ID from result - handle BigInteger
@@ -116,7 +120,7 @@ export class GroupManager {
       }
 
       // @ts-ignore - EditAdmin exists but type might be incomplete
-      await tgClient.invoke(new Api.Channels.EditAdmin({
+      await tgClient.invoke(new Api.channels.EditAdmin({
         channel: inputPeerChannel,
         userId: botEntity,
         adminRights: new Api.ChatAdminRights({
@@ -167,7 +171,7 @@ export class GroupManager {
       }
 
       // @ts-ignore - ExportInvite exists but type might be incomplete
-      const result = await tgClient.invoke(new Api.Channels.ExportInvite({
+      const result = await tgClient.invoke(new Api.channels.ExportInvite({
         channel: inputPeerChannel,
       }))
 
