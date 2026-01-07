@@ -40,6 +40,8 @@ export class BootstrapClient {
   private client: TelegramClient
   private sessionPath: string
   private isConnected = false
+  private originalConsoleLog: typeof console.log | null = null
+  private originalConsoleError: typeof console.error | null = null
 
   constructor(config: TelegramClientConfig) {
     const sessionPath = config.sessionPath || this.getDefaultSessionPath()
@@ -58,28 +60,72 @@ export class BootstrapClient {
   }
 
   /**
+   * Mute gramJS logs temporarily
+   */
+  muteLogs(): void {
+    if (this.originalConsoleLog) return
+
+    this.originalConsoleLog = console.log
+    this.originalConsoleError = console.error
+
+    console.log = () => {}
+    console.error = () => {}
+  }
+
+  /**
+   * Unmute/restore console
+   */
+  unmuteLogs(): void {
+    if (this.originalConsoleLog) {
+      console.log = this.originalConsoleLog
+      console.error = this.originalConsoleError || console.error
+      this.originalConsoleLog = null
+      this.originalConsoleError = null
+    }
+  }
+
+  /**
    * Connect to Telegram
    */
-  async connect(): Promise<void> {
+  async connect(options?: { muteLogs?: boolean }): Promise<void> {
     if (this.isConnected) {
       return
     }
 
-    // @ts-ignore - connect method exists but type definition is incomplete
-    await this.client.connect()
+    if (options?.muteLogs) {
+      this.muteLogs()
+    }
+
+    try {
+      // @ts-ignore - connect method exists but type definition is incomplete
+      await this.client.connect()
+    } finally {
+      if (options?.muteLogs) {
+        this.unmuteLogs()
+      }
+    }
 
     this.isConnected = true
   }
 
   /**
    * Disconnect from Telegram
+   * Handles GramJS timeout errors gracefully
    */
   async disconnect(): Promise<void> {
     if (!this.isConnected) {
       return
     }
 
-    await this.client.disconnect()
+    try {
+      // GramJS disconnect can throw TIMEOUT error, we handle it gracefully
+      await Promise.race([
+        this.client.disconnect(),
+        new Promise((resolve) => setTimeout(resolve, 5000)), // 5s timeout
+      ])
+    } catch {
+      // Ignore disconnect errors (TIMEOUT, connection already closed, etc.)
+    }
     this.isConnected = false
   }
 
@@ -87,8 +133,8 @@ export class BootstrapClient {
    * Ensure user is authorized
    * Prompts for phone number and code if needed
    */
-  async ensureAuthorized(): Promise<boolean> {
-    await this.connect()
+  async ensureAuthorized(options?: { muteLogs?: boolean }): Promise<boolean> {
+    await this.connect(options)
 
     const isAuthorized = await this.client.checkAuthorization()
     if (isAuthorized) {

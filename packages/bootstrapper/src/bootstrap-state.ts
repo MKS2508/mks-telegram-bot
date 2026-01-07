@@ -65,7 +65,7 @@ export interface TopicInfo {
  * Topics selection result
  */
 export interface TopicsSelection {
-  action: 'create' | 'reuse' | 'skip'
+  action: 'reuse' | 'recreate_all' | 'create_missing' | 'delete_duplicates' | 'skip'
   topics?: TopicInfo[]
 }
 
@@ -220,13 +220,15 @@ export class BootstrapState {
       console.log('')
       console.log(chalk.cyan('Your bots:'))
 
-      const botChoices = availableBots.map((bot) => ({
-        name: `${chalk.green('@' + bot.username)} - ${bot.name}`,
-        value: bot.username,
-      }))
-
-      botChoices.push({ name: '➕ Create new bot', value: '__create__' })
-      botChoices.push({ name: '❌ Cancel', value: '__cancel__' })
+      // Put Create and Cancel options first, then available bots
+      const botChoices = [
+        { name: '➕ Create new bot', value: '__create__' },
+        { name: '❌ Cancel', value: '__cancel__' },
+        ...availableBots.map((bot) => ({
+          name: `${chalk.green('@' + bot.username)} - ${bot.name}`,
+          value: bot.username,
+        })),
+      ]
 
       const selected = await select({
         message: 'Select a bot or create a new one:',
@@ -288,13 +290,15 @@ export class BootstrapState {
     console.log('')
     console.log(chalk.cyan('Existing groups/forums:'))
 
-    const groupChoices = existingGroups.map((group) => ({
-      name: `${group.title} (${group.isForum ? 'Forum' : 'Group'}) [ID: ${group.id}]`,
-      value: group.id.toString(),
-    }))
-
-    groupChoices.push({ name: '➕ Create new group', value: '__create__' })
-    groupChoices.push({ name: '⏭️  Skip (no group)', value: '__skip__' })
+    // Put Create and Skip options first, then existing groups
+    const groupChoices = [
+      { name: '➕ Create new group', value: '__create__' },
+      { name: '⏭️  Skip (no group)', value: '__skip__' },
+      ...existingGroups.map((group) => ({
+        name: `${group.title} (${group.isForum ? 'Forum' : 'Group'}) [ID: ${group.id}]`,
+        value: group.id.toString(),
+      })),
+    ]
 
     const selected = await select({
       message: 'Select a group or create a new one:',
@@ -334,23 +338,50 @@ export class BootstrapState {
         return { action: 'skip' }
       }
 
-      return { action: 'create' }
+      return { action: 'create_missing' }
     }
 
     console.log('')
     console.log(chalk.cyan('Existing topics:'))
 
+    // Check for duplicates
+    const topicNames = new Map<string, number[]>()
     existingTopics.forEach((topic) => {
-      console.log(`  • ${topic.name} [ID: ${topic.id}]`)
+      const name = topic.name.toLowerCase()
+      const ids = topicNames.get(name) || []
+      ids.push(topic.id)
+      topicNames.set(name, ids)
     })
+
+    const hasDuplicates = Array.from(topicNames.values()).some((ids) => ids.length > 1)
+
+    existingTopics.forEach((topic) => {
+      const name = topic.name.toLowerCase()
+      const ids = topicNames.get(name) || []
+      const isDuplicate = ids.length > 1
+      const marker = isDuplicate ? chalk.red(' ⚠️ duplicate') : ''
+      console.log(`  • ${topic.name} [ID: ${topic.id}]${marker}`)
+    })
+
+    if (hasDuplicates) {
+      console.log('')
+      console.log(chalk.yellow('⚠️  Duplicate topics detected!'))
+    }
 
     console.log('')
 
-    const choices = [
-      { name: '✅ Reuse all topics', value: 'reuse' },
-      { name: '🔄 Recreate topics', value: 'create' },
-      { name: '⏭️  Skip (no topics)', value: 'skip' },
+    const choices: { name: string; value: string }[] = [
+      { name: '✅ Use existing topics', value: 'reuse' },
+      { name: '➕ Create missing only (keep existing)', value: 'create_missing' },
+      { name: '🔄 Recreate ALL (delete + create fresh)', value: 'recreate_all' },
     ]
+
+    // Only show delete duplicates option if there are duplicates
+    if (hasDuplicates) {
+      choices.push({ name: '🗑️  Delete duplicates only', value: 'delete_duplicates' })
+    }
+
+    choices.push({ name: '⏭️  Skip (no topics)', value: 'skip' })
 
     const action = await select({
       message: 'What would you like to do?',
@@ -361,8 +392,16 @@ export class BootstrapState {
       return { action: 'skip' }
     }
 
-    if (action === 'create') {
-      return { action: 'create' }
+    if (action === 'recreate_all') {
+      return { action: 'recreate_all', topics: existingTopics }
+    }
+
+    if (action === 'create_missing') {
+      return { action: 'create_missing', topics: existingTopics }
+    }
+
+    if (action === 'delete_duplicates') {
+      return { action: 'delete_duplicates', topics: existingTopics }
     }
 
     return {

@@ -11,7 +11,12 @@ export type {
 } from './bot-father/index.js'
 
 export { GroupManager } from './group-manager.js'
-export type { GroupCreationResult, CreateSupergroupOptions } from './group-manager.js'
+export type {
+  GroupCreationResult,
+  CreateSupergroupOptions,
+  ForumGroupInfo,
+  ForumTopicInfo,
+} from './group-manager.js'
 
 export { TopicManager } from './topic-manager.js'
 export type { TopicCreationResult, CreateTopicOptions } from './topic-manager.js'

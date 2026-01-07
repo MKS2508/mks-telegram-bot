@@ -172,9 +172,7 @@ interface BootstrapOptions {
   skipTopics?: boolean
   auto?: boolean
   bot?: string // Target specific bot
-  list?: boolean // List available bots
-  import?: boolean // Import all available bots
-  interactive?: boolean // Select bots to import interactively
+  list?: boolean // List available bots and prompt for import
   reuse?: boolean // Skip prompts, reuse if exists
   force?: boolean // Force recreate
 }
@@ -194,9 +192,7 @@ const command: BootstrapCommand = {
       .option('--skip-topics', 'Skip creating topics', false)
       .option('--auto', 'Use auto-generated names without confirmation', false)
       .option('--bot <value>', 'Target specific bot')
-      .option('--list', 'List available bots from BotFather')
-      .option('--import', 'Import all available bots (use with --list)')
-      .option('--interactive', 'Select bots to import interactively (use with --list)')
+      .option('--list', 'List available bots from BotFather and prompt for import')
       .option('--reuse', 'Reuse existing configuration without prompts')
       .option('--force', 'Force recreate existing configuration')
       .action(async (options) => {
@@ -405,15 +401,50 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
     let chatId: number | undefined
     let groupName: string | undefined
 
-    // Check for existing group in bot config
-    const existingGroup = existingBot?.controlChatId
-      ? { id: Number(existingBot.controlChatId), title: 'Existing Group', isForum: true }
-      : null
+    const groupManager = new GroupManager(client)
 
-    if (!existingGroup && !options.force) {
-      // Prompt for group selection
-      const groupManager = new GroupManager(client)
-      const existingGroups: import('../../packages/bootstrapper/src/bootstrap-state.js').GroupInfo[] = [] // TODO: Fetch existing groups from client
+    // Fetch existing supergroups/forums the user is admin of
+    const forumsResult = await groupManager.getUserForums()
+    const existingGroups: import('../../packages/bootstrapper/src/bootstrap-state.js').GroupInfo[] =
+      forumsResult.success && forumsResult.forums
+        ? forumsResult.forums.map((f) => ({
+            id: f.id,
+            title: f.title,
+            username: f.username,
+            type: 'supergroup' as const,
+            isForum: f.isForum,
+            memberCount: f.memberCount,
+          }))
+        : []
+
+    // If there's a configured group, add it to the list if not already present
+    const configuredGroupId = existingBot?.controlChatId ? Number(existingBot.controlChatId) : null
+    if (configuredGroupId) {
+      const alreadyInList = existingGroups.find((g) => g.id === configuredGroupId)
+      if (!alreadyInList) {
+        // Add configured group at the beginning
+        existingGroups.unshift({
+          id: configuredGroupId,
+          title: '⭐ Configured Group',
+          type: 'supergroup' as const,
+          isForum: true,
+        })
+      } else {
+        // Mark it as configured
+        alreadyInList.title = `⭐ ${alreadyInList.title} (configured)`
+      }
+    }
+
+    // Always show group selection prompt (unless force mode)
+    if (options.force) {
+      // Force create new group
+      const newGroupResult = await createNewGroup(client, groupManager, spinner, botUsername, botName, options)
+      if (!newGroupResult.success) {
+        return
+      }
+      chatId = newGroupResult.chatId
+      groupName = newGroupResult.groupName
+    } else {
       const groupSelection = await bootstrapState.promptGroupSelection(existingGroups)
 
       if (groupSelection.action === 'skip') {
@@ -432,18 +463,6 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
         chatId = newGroupResult.chatId
         groupName = newGroupResult.groupName
       }
-    } else if (existingGroup) {
-      cliLogger.info(`Reusing existing group: ${existingGroup.title}`)
-      chatId = existingGroup.id
-    } else if (options.force) {
-      // Force create group
-      const groupManager = new GroupManager(client)
-      const newGroupResult = await createNewGroup(client, groupManager, spinner, botUsername, botName, options)
-      if (!newGroupResult.success) {
-        return
-      }
-      chatId = newGroupResult.chatId
-      groupName = newGroupResult.groupName
     }
 
     // ========================================
@@ -457,49 +476,158 @@ async function handleBootstrap(options: BootstrapOptions): Promise<void> {
     }
 
     if (chatId && !options.skipTopics) {
-      const existingTopics: import('../../packages/bootstrapper/src/bootstrap-state.js').TopicInfo[] = [] // TODO: Fetch existing topics from group
+      // Fetch existing topics from the forum group
+      const topicGroupManager = new GroupManager(client)
+      const topicsResult = await topicGroupManager.getForumTopics(chatId)
+      const existingTopics: import('../../packages/bootstrapper/src/bootstrap-state.js').TopicInfo[] =
+        topicsResult.success && topicsResult.topics
+          ? topicsResult.topics.map((t) => ({
+              id: t.id,
+              name: t.name,
+              iconColor: t.iconColor,
+            }))
+          : []
+
       const topicsSelection = await bootstrapState.promptTopicsSelection(existingTopics)
 
-      if (topicsSelection.action === 'create') {
+      const allTopicNames = ['General', 'Control', 'Logs', 'Config', 'Bugs']
+      const topicManager = new TopicManager(botToken)
+
+      // Helper function to map topic to result
+      const mapTopicToResult = (name: string, id: number) => {
+        const topicName = name.toLowerCase()
+        if (topicName === 'control') {
+          bootstrapResult.controlTopicId = id
+        } else if (topicName === 'logs' || topicName === 'log') {
+          bootstrapResult.logTopicId = id
+        } else if (topicName === 'config') {
+          bootstrapResult.configTopicId = id
+        } else if (topicName === 'bugs') {
+          bootstrapResult.bugsTopicId = id
+        } else if (topicName === 'general') {
+          bootstrapResult.generalTopicId = id
+        }
+      }
+
+      if (topicsSelection.action === 'reuse' && topicsSelection.topics) {
+        cliLogger.info('Using existing topics')
+        for (const topic of topicsSelection.topics) {
+          console.log(`  ${chalk.cyan(topic.name)}: ${chalk.yellow(String(topic.id))}`)
+          mapTopicToResult(topic.name, topic.id)
+        }
+      } else if (topicsSelection.action === 'create_missing') {
         cliLogger.title('🧵 Step 3: Creating Topics')
 
-        const topicManager = new TopicManager(botToken)
-        const topicNames = ['General', 'Control', 'Logs', 'Config', 'Bugs']
+        // Filter out topics that already exist
+        const existingTopicNames = new Set(existingTopics.map((t) => t.name.toLowerCase()))
+        const topicsToCreate = allTopicNames.filter((name) => !existingTopicNames.has(name.toLowerCase()))
 
-        spinner.text = 'Creating forum topics...'
-        spinner.start()
+        // First, map existing topics to result
+        for (const topic of existingTopics) {
+          console.log(`  ${chalk.cyan(topic.name)}: ${chalk.yellow(String(topic.id))} (existing)`)
+          mapTopicToResult(topic.name, topic.id)
+        }
 
-        const topicResults = await topicManager.createTopics(chatId, topicNames)
+        // Create missing topics
+        if (topicsToCreate.length > 0) {
+          spinner.text = `Creating ${topicsToCreate.length} new topics...`
+          spinner.start()
 
-        spinner.succeed(`Created ${topicResults.length} topics`)
+          const topicResults = await topicManager.createTopics(chatId, topicsToCreate)
+          spinner.succeed(`Created ${topicResults.length} new topics`)
 
-        for (const { name, result } of topicResults) {
-          if (result.success && result.threadId) {
-            console.log(`  ${chalk.cyan(name)}: ${chalk.yellow(String(result.threadId))}`)
+          for (const { name, result } of topicResults) {
+            if (result.success && result.threadId) {
+              console.log(`  ${chalk.cyan(name)}: ${chalk.yellow(String(result.threadId))}`)
+              mapTopicToResult(name, result.threadId)
+            }
+          }
+        } else {
+          cliLogger.info('All required topics already exist')
+        }
+      } else if (topicsSelection.action === 'recreate_all') {
+        cliLogger.title('🧵 Step 3: Recreating Topics')
 
-            // Map topics to result
-            switch (name.toLowerCase()) {
-              case 'control':
-                bootstrapResult.controlTopicId = result.threadId
-                break
-              case 'logs':
-              case 'log':
-                bootstrapResult.logTopicId = result.threadId
-                break
-              case 'config':
-                bootstrapResult.configTopicId = result.threadId
-                break
-              case 'bugs':
-                bootstrapResult.bugsTopicId = result.threadId
-                break
-              case 'general':
-                bootstrapResult.generalTopicId = result.threadId
-                break
+        // Delete all topics except General ID 1
+        const topicsToDelete = existingTopics.filter((t) => t.id !== 1)
+        if (topicsToDelete.length > 0) {
+          spinner.text = `Deleting ${topicsToDelete.length} topics...`
+          spinner.start()
+
+          for (const topic of topicsToDelete) {
+            await topicGroupManager.deleteTopic(chatId, topic.id)
+          }
+          spinner.succeed(`Deleted ${topicsToDelete.length} topics`)
+        }
+
+        // Create fresh topics (skip General if ID 1 exists)
+        const hasDefaultGeneral = existingTopics.some((t) => t.id === 1)
+        const topicsToCreate = hasDefaultGeneral
+          ? allTopicNames.filter((n) => n.toLowerCase() !== 'general')
+          : allTopicNames
+
+        if (hasDefaultGeneral) {
+          // Map the default General topic
+          mapTopicToResult('General', 1)
+          console.log(`  ${chalk.cyan('General')}: ${chalk.yellow('1')} (default)`)
+        }
+
+        if (topicsToCreate.length > 0) {
+          spinner.text = `Creating ${topicsToCreate.length} topics...`
+          spinner.start()
+
+          const topicResults = await topicManager.createTopics(chatId, topicsToCreate)
+          spinner.succeed(`Created ${topicResults.length} topics`)
+
+          for (const { name, result } of topicResults) {
+            if (result.success && result.threadId) {
+              console.log(`  ${chalk.cyan(name)}: ${chalk.yellow(String(result.threadId))}`)
+              mapTopicToResult(name, result.threadId)
             }
           }
         }
-      } else if (topicsSelection.action === 'reuse') {
-        cliLogger.info('Reusing existing topics')
+      } else if (topicsSelection.action === 'delete_duplicates') {
+        cliLogger.title('🧵 Step 3: Deleting Duplicates')
+
+        // Find duplicates (same name, keep lowest ID)
+        const seen = new Map<string, number>()
+        const toDelete: number[] = []
+
+        // Sort by ID ascending so we keep the lowest ID
+        const sortedTopics = [...existingTopics].sort((a, b) => a.id - b.id)
+
+        for (const topic of sortedTopics) {
+          const name = topic.name.toLowerCase()
+          if (seen.has(name)) {
+            toDelete.push(topic.id)
+          } else {
+            seen.set(name, topic.id)
+          }
+        }
+
+        if (toDelete.length > 0) {
+          spinner.text = `Deleting ${toDelete.length} duplicate topics...`
+          spinner.start()
+
+          for (const topicId of toDelete) {
+            if (topicId !== 1) {
+              // Can't delete default General
+              await topicGroupManager.deleteTopic(chatId, topicId)
+            }
+          }
+          spinner.succeed(`Deleted ${toDelete.length} duplicate topics`)
+        } else {
+          cliLogger.info('No duplicates found')
+        }
+
+        // Map remaining topics
+        for (const [_name, id] of seen.entries()) {
+          const originalTopic = existingTopics.find((t) => t.id === id)
+          if (originalTopic) {
+            console.log(`  ${chalk.cyan(originalTopic.name)}: ${chalk.yellow(String(id))}`)
+            mapTopicToResult(originalTopic.name, id)
+          }
+        }
       }
     }
 
@@ -729,13 +857,11 @@ function updateEnvVar(content: string, key: string, value: string): string {
 }
 
 /**
- * Handle --list flag: Show available bots from BotFather and exit
- * @param options - Bootstrap options including --import and --interactive flags
+ * Handle --list flag: Show available bots from BotFather and prompt for import
+ * @param options - Bootstrap options
  */
 async function handleListBots(options: BootstrapOptions): Promise<void> {
-  const shouldImport = options.import || options.interactive
-
-  cliLogger.title(shouldImport ? '📋 Import Bots from BotFather' : '📋 Available Bots')
+  cliLogger.title('📋 Bots from BotFather')
 
   // Try to get API credentials from existing .env files
   const environment = (options.environment ?? 'local') as Environment
@@ -807,13 +933,19 @@ async function handleListBots(options: BootstrapOptions): Promise<void> {
   spinner.text = 'Connecting to Telegram...'
   spinner.start()
 
+  // Read LOG_LEVEL to determine if gramJS logs should be muted
+  const logLevel = process.env.LOG_LEVEL || 'info'
+  const shouldMuteGramJS = logLevel !== 'debug'
+
+  let client: BootstrapClient | null = null
+
   try {
-    const client = new BootstrapClient({
+    client = new BootstrapClient({
       apiId: finalApiId,
       apiHash: finalApiHash,
     })
 
-    const isAuthorized = await client.ensureAuthorized()
+    const isAuthorized = await client.ensureAuthorized({ muteLogs: shouldMuteGramJS })
     if (!isAuthorized) {
       spinner.fail('Authorization failed')
       return
@@ -821,56 +953,100 @@ async function handleListBots(options: BootstrapOptions): Promise<void> {
 
     spinner.succeed('Connected to Telegram')
 
+    // Keep gramJS muted during BotFather operations if LOG_LEVEL != debug
+    if (shouldMuteGramJS) {
+      client.muteLogs()
+    }
+
     // Fetch available bots from BotFather
     const botFather = new BotFatherManager(client)
 
-    if (shouldImport) {
-      // Import mode: Fetch all bots with tokens
-      spinner.text = 'Fetching all bots with tokens from @BotFather...'
-      spinner.start()
+    // Stop spinner for detailed progress output
+    spinner.stop()
 
-      const botsWithTokens = await botFather.getAllBotsWithTokens()
-      spinner.stop()
+    console.log('')
+    console.log(chalk.bold('Fetching bots from BotFather...'))
+    console.log('')
 
-      if (botsWithTokens.length === 0) {
-        cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
+    const botsWithTokens = await botFather.getAllBotsWithTokens()
+
+    // Restore console logs after BotFather operations
+    if (shouldMuteGramJS) {
+      client.unmuteLogs()
+    }
+
+    if (botsWithTokens.length === 0) {
+      cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
+      await client.disconnect()
+      return
+    }
+
+    console.log('')
+    console.log(chalk.bold(`Found ${botsWithTokens.length} bot(s):`))
+    console.log('')
+
+    for (const bot of botsWithTokens) {
+      const alreadyConfigured = envManager.botExists(bot.username)
+      const statusIndicator = alreadyConfigured ? chalk.yellow('⚠') : chalk.green('✓')
+      const statusText = alreadyConfigured ? chalk.dim(' (already configured)') : ''
+
+      console.log(`  ${statusIndicator} ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}${statusText}`)
+    }
+
+    console.log('')
+
+    // Ask if user wants to import
+    const wantsToImport = await confirm({
+      message: 'Do you want to import any of these bots?',
+      default: true,
+    })
+
+    if (!wantsToImport) {
+      cliLogger.info('Import cancelled')
+      await client.disconnect()
+      return
+    }
+
+    // Filter out already configured bots for the selection
+    const availableBots = botsWithTokens.filter(bot => !envManager.botExists(bot.username))
+
+    if (availableBots.length === 0) {
+      cliLogger.info('All bots are already configured')
+      await client.disconnect()
+      return
+    }
+
+    let botsToImport: Array<{ username: string; name: string; token: string }>
+
+    // If only one bot available, ask directly
+    if (availableBots.length === 1) {
+      const singleBot = availableBots[0]!
+      const importSingle = await confirm({
+        message: `Import @${singleBot.username}?`,
+        default: true,
+      })
+
+      if (!importSingle) {
+        cliLogger.info('Import cancelled')
         await client.disconnect()
         return
       }
 
-      console.log('')
-      console.log(chalk.bold(`Found ${botsWithTokens.length} bot(s) across all pages:`))
-      console.log('')
+      botsToImport = [singleBot]
+    } else {
+      // Multiple bots: show selection or import all
+      const importMode = await confirm({
+        message: `Import all ${availableBots.length} available bots?`,
+        default: false,
+      })
 
-      for (const bot of botsWithTokens) {
-        console.log(`  ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}`)
-        console.log(`      Token: ${chalk.yellow(bot.token.slice(0, 15) + '...')}`)
-      }
-
-      console.log('')
-
-      // Determine which bots to import
-      let botsToImport: Array<{ username: string; name: string; token: string }>
-
-      if (options.import && !options.interactive) {
-        // Import all bots
-        const confirmImport = await confirm({
-          message: `Import all ${botsWithTokens.length} bots?`,
-          default: true,
-        })
-
-        if (!confirmImport) {
-          cliLogger.info('Import cancelled')
-          await client.disconnect()
-          return
-        }
-
-        botsToImport = botsWithTokens
+      if (importMode) {
+        botsToImport = availableBots
       } else {
         // Interactive selection
         const selected = await checkbox({
           message: 'Select bots to import (space to select, enter to continue):',
-          choices: botsWithTokens.map((bot) => ({
+          choices: availableBots.map((bot) => ({
             name: `@${bot.username} - ${bot.name}`,
             value: bot,
             checked: false,
@@ -885,132 +1061,113 @@ async function handleListBots(options: BootstrapOptions): Promise<void> {
 
         botsToImport = selected
       }
+    }
 
-      // Import selected bots
-      console.log('')
-      cliLogger.title('📦 Importing Bots')
+    // Import selected bots
+    console.log('')
+    cliLogger.title('📦 Importing Bots')
 
-      const envManager = new EnvManager()
-      const environment = (options.environment ?? 'local') as Environment
+    const environment = (options.environment ?? 'local') as Environment
 
-      let imported = 0
-      let skipped = 0
-      let failed = 0
+    let imported = 0
+    let failed = 0
 
-      for (const bot of botsToImport) {
-        const botExists = envManager.botExists(bot.username)
-
-        if (botExists) {
-          cliLogger.warn(`@${bot.username} already configured, skipping`)
-          skipped++
-          continue
-        }
-
-        spinner.text = `Creating config for @${bot.username}...`
-        spinner.start()
-
-        try {
-          await envManager.createEnv(bot.username, environment, {
-            botToken: bot.token,
-            mode: 'polling',
-          })
-
-          spinner.succeed(`Created config for @${bot.username}`)
-          imported++
-        } catch (error) {
-          spinner.fail(`Failed to create config for @${bot.username}`)
-          failed++
-        }
-      }
-
-      // Set active bot if not set
-      const currentActive = envManager.getActiveBot()
-      if (!currentActive && botsToImport.length > 0) {
-        const firstBot = botsToImport[0]
-        if (firstBot) {
-          await envManager.setActiveBot(firstBot.username)
-          cliLogger.success(`Set @${firstBot.username} as active bot`)
-        }
-      }
-
-      // Summary
-      console.log('')
-      cliLogger.title('✅ Import Complete')
-      console.log('')
-      console.log(chalk.bold('Summary:'))
-      console.log(`  Imported: ${chalk.green(String(imported))}`)
-      console.log(`  Skipped: ${chalk.yellow(String(skipped))}`)
-      console.log(`  Failed:  ${chalk.red(String(failed))}`)
-      console.log('')
-
-      if (imported > 0) {
-        cliLogger.success('Bots imported successfully!')
-        cliLogger.info('Configuration saved to:')
-        for (const bot of botsToImport) {
-          if (!envManager.botExists(bot.username)) continue
-          console.log(`  ${chalk.cyan(`core/.envs/${bot.username}/${environment}.env`)}`)
-        }
-        console.log('')
-        cliLogger.info('Next steps:')
-        console.log(`  ${chalk.dim('1.')} Run: ${chalk.cyan('bun run dev')}`)
-        console.log(`  ${chalk.dim('2.')} Send /start to your bot in Telegram`)
-        console.log(`  ${chalk.dim('3.')} Run: ${chalk.cyan('bun run bot list')} to see all configured bots`)
-        console.log('')
-      }
-    } else {
-      // List mode: Show bots without tokens (fetch all pages)
-      spinner.text = 'Fetching all bots from @BotFather...'
+    for (const bot of botsToImport) {
+      spinner.text = `Creating config for @${bot.username}...`
       spinner.start()
 
-      const result = await botFather.listAllBots()
-      spinner.stop()
+      try {
+        await envManager.createEnv(bot.username, environment, {
+          botToken: bot.token,
+          mode: 'polling',
+        })
 
-      if (!result.success || !result.bots || result.bots.length === 0) {
-        cliLogger.info('No bots found. Create your first bot with: bun run bootstrap')
-        await client.disconnect()
-        return
+        spinner.succeed(`Created config for @${bot.username}`)
+        imported++
+      } catch (error) {
+        spinner.fail(`Failed to create config for @${bot.username}`)
+        failed++
       }
+    }
 
-      console.log('')
-      console.log(chalk.bold(`Found ${result.bots.length} bot(s):`))
-      console.log('')
-
-      for (const bot of result.bots) {
-        console.log(`  ${chalk.green('@' + bot.username)} - ${chalk.cyan(bot.name)}`)
+    // Set active bot if not set
+    const currentActive = envManager.getActiveBot()
+    if (!currentActive && botsToImport.length > 0) {
+      const firstBot = botsToImport[0]
+      if (firstBot) {
+        await envManager.setActiveBot(firstBot.username)
+        cliLogger.success(`Set @${firstBot.username} as active bot`)
       }
+    }
 
+    // Show configured bots after import
+    console.log('')
+    const configuredBots = envManager.listBots()
+
+    if (configuredBots.length > 0) {
+      console.log(chalk.bold('Configured bots:'))
       console.log('')
-      cliLogger.info('To use a specific bot, run: bun run bootstrap --bot <username>')
-      console.log('')
 
-      // Also show configured bots from EnvManager
-      const envManager = new EnvManager()
-      const configuredBots = envManager.listBots()
+      for (const bot of configuredBots) {
+        const activeMarker = bot.isActive ? chalk.green('✓ ') : '  '
+        const environments = []
+        if (bot.hasLocal) environments.push(chalk.cyan('local'))
+        if (bot.hasStaging) environments.push(chalk.yellow('staging'))
+        if (bot.hasProduction) environments.push(chalk.red('production'))
 
-      if (configuredBots.length > 0) {
-        console.log(chalk.bold('Configured in this project:'))
-        console.log('')
-
-        for (const bot of configuredBots) {
-          const activeMarker = bot.isActive ? chalk.green('✓ ') : '  '
-          const environments = []
-          if (bot.hasLocal) environments.push(chalk.cyan('local'))
-          if (bot.hasStaging) environments.push(chalk.yellow('staging'))
-          if (bot.hasProduction) environments.push(chalk.red('production'))
-
-          console.log(`  ${activeMarker}${chalk.green('@' + bot.username)}`)
-          console.log(`      Environments: ${environments.join(', ')}`)
-        }
-        console.log('')
+        console.log(`  ${activeMarker}${chalk.green('@' + bot.username)}`)
+        console.log(`      Environments: ${environments.join(', ')}`)
       }
+      console.log('')
+    }
+
+    // Summary
+    console.log('')
+    cliLogger.title('✅ Import Complete')
+    console.log('')
+    console.log(chalk.bold('Summary:'))
+    console.log(`  Imported: ${chalk.green(String(imported))}`)
+    console.log(`  Failed:  ${chalk.red(String(failed))}`)
+    console.log('')
+
+    if (imported > 0) {
+      cliLogger.success('Bots imported successfully!')
+      cliLogger.info('Configuration saved to:')
+      for (const bot of botsToImport) {
+        if (!envManager.botExists(bot.username)) continue
+        console.log(`  ${chalk.cyan(`core/.envs/${bot.username}/${environment}.env`)}`)
+      }
+      console.log('')
+      cliLogger.info('Next steps:')
+      console.log(`  ${chalk.dim('1.')} Run: ${chalk.cyan('bun run dev')}`)
+      console.log(`  ${chalk.dim('2.')} Send /start to your bot in Telegram`)
+      console.log(`  ${chalk.dim('3.')} Run: ${chalk.cyan('bun run bot list')} to see all configured bots`)
+      console.log('')
     }
 
     await client.disconnect()
   } catch (error) {
     spinner.stop()
+    // Ensure console is restored even if there's an error
+    if (shouldMuteGramJS && client) {
+      try {
+        client.unmuteLogs()
+      } catch {
+        // Ignore errors during cleanup
+      }
+    }
     cliLogger.error('Failed to fetch bots')
     if (error instanceof Error) {
       console.error(chalk.dim(`  ${error.message}`))
+    }
+  } finally {
+    // Ensure console is always restored
+    if (shouldMuteGramJS && client !== null) {
+      try {
+        client.unmuteLogs()
+      } catch {
+        // Ignore errors during cleanup
+      }
     }
   }
 }

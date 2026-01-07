@@ -41,6 +41,31 @@ export interface BotAdminPermissions {
 }
 
 /**
+ * Forum/Supergroup information
+ */
+export interface ForumGroupInfo {
+  id: number
+  channelId: number
+  title: string
+  username?: string
+  isForum: boolean
+  memberCount?: number
+  accessHash: bigint
+}
+
+/**
+ * Forum topic information
+ */
+export interface ForumTopicInfo {
+  id: number
+  name: string
+  iconColor?: number
+  iconEmojiId?: string
+  isClosed: boolean
+  isPinned: boolean
+}
+
+/**
  * Group manager for creating and managing Telegram groups
  */
 export class GroupManager {
@@ -57,11 +82,6 @@ export class GroupManager {
     try {
       const { Api } = await import('telegram/tl/index.js')
 
-      // DEBUG: Log what we got
-      console.log('[DEBUG] Api object keys:', Object.keys(Api || {}))
-      console.log('[DEBUG] Api.channels:', Api.channels)
-
-      // Create channel with forum mode
       // @ts-ignore - CreateChannel exists but type might be different
       const result = await tgClient.invoke(new Api.channels.CreateChannel({
         title: options.title,
@@ -70,13 +90,26 @@ export class GroupManager {
         forum: options.forumMode ?? true,
       }))
 
-      // Extract chat ID from result - handle BigInteger
+      // Extract chat ID from result.chats array
+      // GramJS returns Api.TypeUpdates with structure: { chats: Api.TypeChat[], ... }
       let chatId: number | undefined
-      // @ts-ignore - result structure varies
-      if (result?.chatId) {
+      // @ts-ignore - result structure is Api.Updates with chats array
+      if (result?.chats && Array.isArray(result.chats) && result.chats.length > 0) {
         // @ts-ignore
-        const rawId = result.chatId
-        chatId = typeof rawId === 'bigint' ? Number(rawId) : Number(rawId)
+        const channel = result.chats[0]
+        let rawChannelId: number
+
+        // Handle different ID formats (bigint, BigInteger from big-integer lib)
+        if (typeof channel.id === 'bigint') {
+          rawChannelId = Number(channel.id)
+        } else if (typeof channel.id === 'object' && 'value' in channel.id) {
+          rawChannelId = Number(channel.id.value.toString())
+        } else {
+          rawChannelId = Number(channel.id)
+        }
+
+        // For supergroups/channels, chat ID format is -100{channelId}
+        chatId = -Number(`100${rawChannelId}`)
       }
 
       return {
@@ -299,5 +332,194 @@ export class GroupManager {
 
     // Otherwise just return absolute value
     return abs
+  }
+
+  /**
+   * Get all supergroups/forums the user is a member of
+   */
+  async getUserForums(): Promise<{
+    success: boolean
+    forums?: ForumGroupInfo[]
+    error?: string
+  }> {
+    const tgClient = this.client.getClient()
+
+    try {
+      const dialogs = await tgClient.getDialogs({ limit: 100 })
+      const forums: ForumGroupInfo[] = []
+
+      for (const dialog of dialogs) {
+        const entity = dialog.entity
+        if (!entity) continue
+
+        // @ts-ignore - className exists at runtime
+        if (entity.className === 'Channel' && entity.megagroup) {
+          // @ts-ignore
+          const channel = entity
+
+          // Only include groups where user is admin (adminRights exists only for admins)
+          // @ts-ignore
+          if (!channel.adminRights) {
+            continue
+          }
+
+          // Extract channel ID
+          let rawChannelId: number
+          if (typeof channel.id === 'bigint') {
+            rawChannelId = Number(channel.id)
+          } else if (typeof channel.id === 'object' && 'value' in channel.id) {
+            rawChannelId = Number((channel.id as { value: unknown }).value?.toString() || '0')
+          } else {
+            rawChannelId = Number(channel.id)
+          }
+
+          // Convert to chat ID format (-100xxx)
+          const chatId = -Number(`100${rawChannelId}`)
+
+          // Extract access hash
+          let accessHash: bigint
+          if (typeof channel.accessHash === 'bigint') {
+            accessHash = channel.accessHash
+          } else if (typeof channel.accessHash === 'object' && 'value' in channel.accessHash) {
+            accessHash = BigInt((channel.accessHash as { value: unknown }).value?.toString() || '0')
+          } else {
+            accessHash = BigInt(channel.accessHash?.toString() || '0')
+          }
+
+          forums.push({
+            id: chatId,
+            channelId: rawChannelId,
+            title: channel.title || 'Unknown',
+            username: channel.username ?? undefined,
+            isForum: channel.forum ?? false,
+            memberCount: channel.participantsCount ?? undefined,
+            accessHash,
+          })
+        }
+      }
+
+      return { success: true, forums }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Get all topics from a forum group
+   * @param chatId The forum chat ID (with -100 prefix)
+   */
+  async getForumTopics(chatId: number): Promise<{
+    success: boolean
+    topics?: ForumTopicInfo[]
+    error?: string
+  }> {
+    const tgClient = this.client.getClient()
+
+    try {
+      // Get channel entity to fetch access hash
+      const channelEntity = await this.getChannelEntity(chatId)
+      if (!channelEntity) {
+        return { success: false, error: 'Could not resolve channel entity' }
+      }
+
+      const { Api } = await import('telegram/tl/index.js')
+
+      // Extract raw channel ID from chat ID
+      const rawChannelId = this.extractChannelId(chatId)
+
+      // @ts-ignore - GetForumTopics exists
+      const result = await tgClient.invoke(new Api.channels.GetForumTopics({
+        channel: new Api.InputChannel({
+          channelId: toBigInteger(rawChannelId),
+          accessHash: toBigInteger(channelEntity.accessHash),
+        }),
+        offsetDate: 0,
+        offsetId: 0,
+        offsetTopic: 0,
+        limit: 100,
+      }))
+
+      const topics: ForumTopicInfo[] = []
+
+      // @ts-ignore - topics array exists in result
+      if (result?.topics && Array.isArray(result.topics)) {
+        for (const topic of result.topics) {
+          // Skip deleted topics (ForumTopicDeleted doesn't have title)
+          // @ts-ignore - className exists at runtime
+          if (topic.className === 'ForumTopicDeleted' || !('title' in topic)) {
+            continue
+          }
+
+          // @ts-ignore - we've verified this is a ForumTopic
+          topics.push({
+            id: Number(topic.id),
+            name: topic.title || 'Unknown',
+            iconColor: topic.iconColor ?? undefined,
+            iconEmojiId: topic.iconEmojiId?.toString() ?? undefined,
+            isClosed: topic.closed ?? false,
+            isPinned: topic.pinned ?? false,
+          })
+        }
+      }
+
+      return { success: true, topics }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Delete a forum topic
+   * Note: Cannot delete the default General topic (ID 1)
+   * @param chatId The forum chat ID (with -100 prefix)
+   * @param topicId The topic ID to delete
+   */
+  async deleteTopic(
+    chatId: number,
+    topicId: number
+  ): Promise<{
+    success: boolean
+    error?: string
+  }> {
+    // Cannot delete default General topic
+    if (topicId === 1) {
+      return { success: false, error: 'Cannot delete default General topic (ID 1)' }
+    }
+
+    const tgClient = this.client.getClient()
+
+    try {
+      const channelEntity = await this.getChannelEntity(chatId)
+      if (!channelEntity) {
+        return { success: false, error: 'Could not resolve channel entity' }
+      }
+
+      const { Api } = await import('telegram/tl/index.js')
+      const rawChannelId = this.extractChannelId(chatId)
+
+      // @ts-ignore - DeleteTopicHistory exists
+      await tgClient.invoke(
+        new Api.channels.DeleteTopicHistory({
+          channel: new Api.InputChannel({
+            channelId: toBigInteger(rawChannelId),
+            accessHash: toBigInteger(channelEntity.accessHash),
+          }),
+          topMsgId: topicId,
+        })
+      )
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
   }
 }
