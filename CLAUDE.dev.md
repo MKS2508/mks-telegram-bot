@@ -5,8 +5,8 @@
 Guía de desarrollo para extender y modificar el bot template.
 
 **Documentación relacionada**:
-- [docs/development/setup.mdx](./docs/development/setup.mdx)
-- [docs/development/patterns.mdx](./docs/development/patterns.mdx)
+- [docs/development.md](./docs/development.md)
+- [docs/getting-started.md](./docs/getting-started.md)
 
 ---
 
@@ -58,9 +58,10 @@ export async function handleMyCommand(ctx: Context): Promise<void> {
 
 ### 2. Agregar Logger Especializado (si no existe)
 
-**Archivo**: `packages/utils/src/logger.ts`
+**Archivo**: `core/src/middleware/logging.ts`
 
 ```typescript
+import { component } from '@mks2508/better-logger'
 export const myCommandLogger = component('MyCommand')
 ```
 
@@ -275,7 +276,7 @@ bun test              # Run tests
 - `core/src/handlers/` - Command handlers
 - `core/src/middleware/` - Telegraf middleware
 - `core/src/config/` - Configuration and env validation
-- `packages/utils/src/` - Shared utilities
+- `core/src/utils/` - Utilities (formatters, instance-manager, etc.)
 
 ---
 
@@ -397,9 +398,6 @@ core/src/
 │   └── instance-manager.ts
 └── index.ts           # SOLO registro de comandos
                         # NO lógica de comandos aquí
-
-packages/utils/src/
-└── logger.ts          # Loggers especializados
 ```
 
 ---

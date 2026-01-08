@@ -2,7 +2,7 @@
 
 > Template monorepo para bots de Telegram con Bun, Telegraf y TypeScript
 
-[![Use this template](https://github.com/MKS2508/mks-telegram-bot/generate)](https://github.com/MKS2508/mks-telegram-bot/generate)
+[![Use this template](https://img.shields.io/badge/Use%20this-template-blue?style=for-the-badge)](https://github.com/MKS2508/mks-telegram-bot/generate)
 
 Template listo para producción con soporte **multibot**, multi-entorno, multi-instancia, y las mejores prácticas de desarrollo.
 
@@ -11,7 +11,7 @@ Template listo para producción con soporte **multibot**, multi-entorno, multi-i
 - 🤖 **Multibot**: Gestiona múltiples bots desde un mismo proyecto
 - 🌍 **Multi-entorno**: local, staging, production para cada bot
 - 🔄 **Idempotente**: Reutiliza bots existentes sin recrearlos
-- 🎯 **Bootstrap interactivo**: Configuración guiada paso a paso
+- 🎯 **Bootstrap interactivo**: Configuración guiada paso a paso via [@mks2508/telegram-bot-manager](https://www.npmjs.com/package/@mks2508/telegram-bot-manager)
 - ✅ **BotFather integrado**: Lista y reutiliza bots creados
 
 ## Quick Start (5 min)
@@ -33,7 +33,7 @@ cd my-bot
 bun install
 
 # Bootstrap interactivo (crea bot, grupo, topics y configura .env)
-npx @mks2508/telegram-bot-manager bootstrap
+bunx @mks2508/telegram-bot-manager bootstrap
 ```
 
 El comando `bootstrap` te guiará paso a paso:
@@ -68,19 +68,12 @@ bun run setup
 El comando `setup` te preguntará:
 - Bot token (pega el token de @BotFather)
 - Modo (polling para desarrollo)
-- Comandos de control (requiere tu User ID - ver abajo cómo obtenerlo)
+- Comandos de control (requiere tu User ID)
 
 #### Obtener tu Telegram User ID
 
-Antes de ejecutar setup, obtén tu User ID:
-
 1. **Opción 1**: Enviar `/getinfo` al bot después de arrancarlo
 2. **Opción 2**: Hablar con [@userinfobot](https://t.me/userinfobot) en Telegram
-
-El comando `/getinfo` mostrará:
-- Tu User ID (para `TG_AUTHORIZED_USER_IDS`)
-- Chat ID (para `TG_CONTROL_CHAT_ID`)
-- Topic ID (si estás en un topic)
 
 ### 3. Arrancar en Desarrollo
 
@@ -94,42 +87,54 @@ Envía `/start` o `/health` a tu bot en Telegram.
 
 ## Comandos CLI
 
-### Comandos Principales
+### Bot Management (via bunx/npx)
+
+Usa `@mks2508/telegram-bot-manager` para gestionar bots:
+
+```bash
+# Bootstrap interactivo completo
+bunx @mks2508/telegram-bot-manager bootstrap
+
+# Listar bots desde BotFather e importar
+bunx @mks2508/telegram-bot-manager bootstrap --list
+
+# Gestión de bots configurados
+bunx @mks2508/telegram-bot-manager bot list
+bunx @mks2508/telegram-bot-manager bot use mybot123bot
+bunx @mks2508/telegram-bot-manager bot info mybot123bot
+bunx @mks2508/telegram-bot-manager bot delete mybot123bot
+
+# Configurar bot via BotFather
+bunx @mks2508/telegram-bot-manager configure commands mybot123bot
+bunx @mks2508/telegram-bot-manager configure description mybot123bot
+bunx @mks2508/telegram-bot-manager configure about mybot123bot
+bunx @mks2508/telegram-bot-manager configure name mybot123bot
+
+# Crear topics
+bunx @mks2508/telegram-bot-manager topics
+```
+
+### Comandos Locales
 
 | Comando | Descripción |
 | ------- | ----------- |
-| `bun run bootstrap` | **Bootstrap completo**: crea bot, grupo, topics |
-| `bun run setup` | Configuración manual de entorno |
+| `bun run dev` | Desarrollo con hot reload |
+| `bun run start` | Producción |
+| `bun run setup` | Setup manual de entorno |
 | `bun run doctor` | Diagnóstico de configuración |
+| `bun run ngrok` | Túnel ngrok para webhooks |
+| `bun run typecheck` | Type check con tsgo |
+| `bun run lint` | Lint con oxlint |
+| `bun run format` | Format con prettier |
+| `bun run test` | Ejecutar tests |
 
-### Comandos Multibot
-
-| Comando | Descripción |
-| ------- | ----------- |
-| `bun run bot list` | Listar todos los bots configurados |
-| `bun run bot use <username>` | Establecer bot activo |
-| `bun run bot info <username>` | Información detallada de un bot |
-| `bun run bot delete <username>` | Eliminar configuración de bot |
-| `bun run bot migrate` | Migrar .env antiguos a nueva estructura |
-
-### Comandos de Bootstrap
-
-| Comando | Descripción |
-| ------- | ----------- |
-| `bun run bootstrap --list` | Listar bots desde BotFather |
-| `bun run bootstrap --bot <user>` | Usar bot específico |
-| `bun run bootstrap --reuse` | Reutilizar sin prompts |
-| `bun run bootstrap --force` | Forzar recreación |
-| `bun run bootstrap --skip-topics` | Skip topics creation |
-
-### Otros Comandos
+### Scripts de Entorno
 
 | Comando | Descripción |
 | ------- | ----------- |
 | `bun run setup:staging` | Setup para entorno staging |
 | `bun run setup:production` | Setup para producción |
-| `bun run cli status` | Ver instancias corriendo |
-| `bun run ngrok` | ngrok con webhook auto-config |
+| `TG_ENV=staging bun run dev` | Dev con entorno staging |
 
 ## Sistema Multibot
 
@@ -149,11 +154,9 @@ core/.envs/
 
 ### Selección de Bot Activo
 
-Hay tres formas de seleccionar el bot activo:
-
-1. **Vía symlink .active** (automático con `bot use`):
+1. **Vía comando** (recomendado):
 ```bash
-bun run bot use mybot123bot
+bunx @mks2508/telegram-bot-manager bot use mybot123bot
 ```
 
 2. **Vía variable de entorno**:
@@ -161,95 +164,31 @@ bun run bot use mybot123bot
 TG_BOT=mybot123bot bun run dev
 ```
 
-3. **Automático**: El bot configurado más recientemente se activa automáticamente
-
-### Múltiples Entornos por Bot
-
-Cada bot puede tener configuraciones independientes para local, staging y production:
+### Workflow Típico
 
 ```bash
-# Desarrollar con bot local
-bun run dev  # Usa .envs/{bot}/local.env
+# 1. Listar bots disponibles desde BotFather
+bunx @mks2508/telegram-bot-manager bootstrap --list
 
-# Desarrollar con bot staging
-TG_ENV=staging bun run dev  # Usa .envs/{bot}/staging.env
+# 2. Bootstrap nuevo bot o importar existente
+bunx @mks2508/telegram-bot-manager bootstrap
 
-# Desarrollar con bot production
-TG_ENV=production bun run dev  # Usa .envs/{bot}/production.env
-```
-
-### Workflow Multibot Típico
-
-```bash
-# 1. Listar bots disponibles
-bun run bootstrap --list
-
-# 2. Bootstrap nuevo bot
-bun run bootstrap
-
-# 3. Listar bots configurados
-bun run bot list
+# 3. Listar bots configurados localmente
+bunx @mks2508/telegram-bot-manager bot list
 
 # 4. Cambiar bot activo
-bun run bot use anotherbot456bot
+bunx @mks2508/telegram-bot-manager bot use anotherbot
 
-# 5. Ver info de bot específico
-bun run bot info mybot123bot
-
-# 6. Migrar configuraciones antiguas
-bun run bot migrate
+# 5. Desarrollar
+bun run dev
 ```
 
-### Creación de Grupos y Topics
-
-El bootstrapper puede crear automáticamente:
-
-- **Grupo/Forum**: Un supergrupo con modo forum habilitado
-- **Topics**: General, Control, Logs, Config, Bugs
-- **Bot como admin**: El bot se añade automáticamente como administrador
-
-**Organización con Topics:**
-
-```
-📊 General     - Chat general, comandos públicos
-🤖 Control     - Comandos de control (/stop, /restart, /mode)
-📋 Logs        - Streaming de logs del bot
-⚙️ Config      - Discusiones de configuración
-🐛 Bugs        - Reporte de bugs
-```
-
-## Scripts de Desarrollo
-
-| Script | Descripción |
-| ------ | ----------- |
-| `bun run dev` | Hot reload (development) |
-| `bun run start` | Production start |
-| `bun run build` | Typecheck + lint |
-| `bun run test` | Ejecutar tests |
-| `bun run typecheck` | Type-check con tsgo |
-| `bun run lint` | Lint con oxlint |
-
-## Documentación
-
-| Documento | Descripción |
-| --------- | ----------- |
-| [Getting Started](./docs/getting-started.md) | Guía de inicio paso a paso |
-| [Environment](./docs/environment.md) | Variables de entorno |
-| [CLI Commands](./docs/cli-commands.md) | Comandos CLI disponibles |
-| [Development](./docs/development.md) | Flujo de desarrollo |
-| [Troubleshooting](./docs/troubleshooting.md) | Problemas comunes |
-
-**Documentación adicional:**
-- [CLAUDE.md](./CLAUDE.md) - Entry point principal
-- [CLAUDE.dev.md](./CLAUDE.dev.md) - Guía de desarrollo
-- [CLAUDE.deploy.md](./CLAUDE.deploy.md) - Deployment y entornos
-
-## Estructura del Monorepo
+## Estructura del Proyecto
 
 ```
 mks-telegram-bot/
-├── core/                    # Bot principal (@mks2508/telegram-bot-core)
-│   ├── .envs/              # ✨ NUEVO: Configuraciones multibot
+├── core/                    # @mks2508/telegram-bot-core (Bot principal)
+│   ├── .envs/              # Configuraciones multibot
 │   │   ├── {botUsername}/
 │   │   │   ├── local.env
 │   │   │   ├── staging.env
@@ -261,114 +200,77 @@ mks-telegram-bot/
 │   │   ├── config/          # Configuration & env validation
 │   │   ├── handlers/        # Command handlers
 │   │   ├── middleware/      # Telegraf middleware
-│   │   ├── types/           # TypeScript types & Result pattern
-│   │   └── utils/           # Utilities (bot-manager, instance-manager)
-│   └── .env.example         # Template de variables de entorno
-├── packages/
-│   ├── bootstrapper/        # ✨ NUEVO: Bootstrapper con GramJS
-│   │   └── src/
-│   │       ├── client.ts           # GramJS client wrapper
-│   │       ├── bot-father.ts       # BotFather automation
-│   │       ├── group-manager.ts    # Grupo/Forum creation
-│   │       ├── topic-manager.ts    # Topics creation
-│   │       ├── env-manager.ts      # Multibot .env management
-│   │       └── bootstrap-state.ts  # Interactive prompts
-│   └── utils/              # Utilidades compartidas
-│       └── src/
-│           ├── logger.ts     # Better Logger setup
-│           └── result.ts     # Result type pattern
-├── tools/                  # CLI tools
+│   │   ├── types/           # TypeScript types
+│   │   └── utils/           # Utilities (instance-manager, etc.)
+│   ├── logs/               # Log files
+│   ├── tmp/                # Instance lock files
+│   └── .env.example        # Template de variables
+├── tools/                  # CLI tools locales
 │   └── commands/
-│       ├── bootstrap.ts     # ✨ NUEVO: Bootstrap interactivo
-│       ├── bot.ts           # ✨ NUEVO: Gestión multibot
-│       ├── setup.ts         # Interactive setup
-│       ├── doctor.ts        # Diagnostics
-│       ├── status.ts        # Instance status
-│       └── ngrok.ts         # ngrok integration
+│       ├── setup.ts        # Setup manual interactivo
+│       ├── doctor.ts       # Diagnóstico de configuración
+│       ├── status.ts       # Estado de instancias
+│       └── ngrok.ts        # Integración ngrok
 ├── docs/                   # Documentación
 │   ├── getting-started.md
 │   ├── environment.md
 │   ├── cli-commands.md
 │   ├── development.md
-│   ├── troubleshooting.md
-│   └── examples/           # Ejemplos de código
-└── apps/                   # Apps de ejemplo (futuro)
+│   └── troubleshooting.md
+├── apps/                   # Apps adicionales (futuro)
+├── Dockerfile              # Multi-stage build
+├── docker-compose.yml      # Containers locales
+├── CLAUDE.md               # Entry point para Claude
+├── CLAUDE.dev.md           # Guía de desarrollo
+└── CLAUDE.deploy.md        # Guía de deployment
 ```
 
 ## Stack Tecnológico
 
 | Herramienta | Versión | Uso |
-| ----------- | ------ | --- |
+| ----------- | ------- | --- |
 | **Bun** | 1.3+ | Runtime & package manager |
 | **TypeScript** | 5.9+ | Lenguaje |
 | **Telegraf** | 4.16+ | Telegram Bot API |
-| **GramJS** | 2.26+ | MTProto API (BotFather automation) |
 | **Zod** | 3.24+ | Schema validation |
-| **Better Logger** | 4.0.0 | Logging |
-| **@mks2508/no-throw** | 0.1.0 | Result type pattern |
-| **tsgo** | native-preview | Type checking |
+| **tsgo** | native-preview | Type checking (~10x más rápido) |
 | **oxlint** | latest | Linting |
 | **prettier** | 3.4+ | Formatting |
 | **@inquirer/prompts** | latest | Interactive CLI prompts |
 | **ora** | latest | CLI spinners |
 
-## Features
+### Paquete Externo para Bot Management
 
-### Core
-- ✅ Result type pattern para error handling sin excepciones
-- ✅ TypeScript strict mode con tipado completo
-- ✅ Soporte polling y webhook modes
-- ✅ Configuración centralizada con Zod validation
-- ✅ Singleton pattern para BotManager y Config
+| Paquete | Versión | Uso |
+| ------- | ------- | --- |
+| **@mks2508/telegram-bot-manager** | 0.1.1+ | BotFather automation, multibot management |
 
-### Multibot ✨
-- ✅ Gestión de múltiples bots desde un mismo proyecto
-- ✅ Directorio `.envs/` con configuraciones centralizadas
-- ✅ Selección de bot activo vía symlink o variable de entorno
-- ✅ BotFather automation para listar y reutilizar bots
-- ✅ Bootstrapper interactivo con prompts guiados
-- ✅ Migración automática desde estructura antigua
+## Bot Commands
 
-### Multi-Entorno
-- ✅ Soporte para local, staging, production
-- ✅ Archivos `.env.{environment}` separados
-- ✅ Nueva estructura `.envs/{bot}/{environment}.env`
-- ✅ Selección vía `TG_ENV`
+### Public Commands
 
-### Multi-Instancia
-- ✅ Lock management con archivos PID
-- ✅ Detección de conflictos
-- ✅ Status CLI para ver instancias
-- ✅ Doctor CLI para diagnóstico
+| Comando | Descripción |
+| ------- | ----------- |
+| `/start` | Welcome message |
+| `/health` | Health check |
+| `/uptime` | Uptime info |
+| `/stats` | Statistics |
+| `/getinfo` | Tu User ID, Chat ID, Topic ID |
+| `/logs` | Log streaming status |
 
-### Logging System
-Tres destinos de logging usando Better Logger 4.0.0:
+### Control Commands (requieren autorización)
 
-1. **Console** - Colored output con preset cyberpunk
-2. **File** - Logs persistentes con rotación automática
-3. **Telegram** - Streaming a chat con buffering
+| Comando | Descripción |
+| ------- | ----------- |
+| `/stop` | Graceful shutdown |
+| `/restart` | Restart con stats reset |
+| `/mode` | Switch polling/webhook |
+| `/webhook` | Webhook configuration |
 
-### Bot Commands
+## Organización con Topics
 
-**Public Commands**:
-- `/start` - Welcome message
-- `/health` - Health check
-- `/uptime` - Uptime info
-- `/stats` - Statistics
-- `/getinfo` - Get your User ID, Chat ID, and Topic ID for configuration
-- `/logs` - Log streaming status
+El bot soporta **Forum Topics** para mantener el chat organizado:
 
-**Control Commands** (requieren autorización):
-- `/stop` - Graceful shutdown
-- `/restart` - Restart con stats reset
-- `/mode` - Switch polling/webhook
-- `/webhook` - Webhook configuration
-
-### Organización con Topics
-
-El bot soporta **Forum Topics** para mantener el chat organizado. Puedes crear topics específicos para diferentes propósitos:
-
-**Topics Recomendados:**
 ```
 📊 General     - Chat general, comandos públicos
 🤖 Control     - Comandos de control (/stop, /restart, /mode)
@@ -377,24 +279,8 @@ El bot soporta **Forum Topics** para mantener el chat organizado. Puedes crear t
 🐛 Bugs        - Reporte de bugs
 ```
 
-**Configuración por Topic:**
+**Configuración:**
 
-1. **Control en topic específico:**
-   - Crea un topic llamado "Control" en tu grupo
-   - Envia `/getinfo` dentro de ese topic
-   - Copia el `TG_CONTROL_TOPIC_ID` a tu `.env`
-   - Los comandos de control solo funcionarán en ese topic
-
-2. **Logs en topic específico:**
-   - Crea un topic llamado "Logs"
-   - Configura `TG_LOG_CHAT_ID` y `TG_LOG_TOPIC_ID`
-   - Los logs del bot se enviarán a ese topic
-
-3. **Menciones del bot:**
-   - El bot responde a `@bot_username` en cualquier topic
-   - Útil para obtener info rápida sin comandos
-
-**Ejemplo de configuración completa:**
 ```bash
 # .env.local
 TG_AUTHORIZED_USER_IDS=123456789
@@ -407,36 +293,22 @@ TG_LOG_TOPIC_ID=67890           # Logs van a este topic
 
 ## Development Workflow
 
-### Setup Inicial
-
 ```bash
-# Instalar dependencias
+# 1. Instalar dependencias
 bun install
 
-# Bootstrap interactivo (recomendado)
-bun run bootstrap
+# 2. Bootstrap (recomendado)
+bunx @mks2508/telegram-bot-manager bootstrap
 
-# O setup manual
-bun run setup
-
-# Verificar configuración
+# 3. Verificar configuración
 bun run doctor
 
-# Arrancar en desarrollo
+# 4. Desarrollar
 bun run dev
-```
 
-### Antes de Commitear
-
-```bash
-# Verificar tipo y lint
-bun run build
-
-# Ejecutar tests
+# 5. Antes de commitear
+bun run build  # typecheck + lint
 bun test
-
-# O usar precommit
-bun run precommit
 ```
 
 ### Code Style
@@ -444,26 +316,48 @@ bun run precommit
 - TypeScript strict mode
 - Semi: false, singleQuote: true
 - Result type pattern para error handling
-- Better Logger para logging (no console.*)
-
-## Examples
-
-Ver [`docs/examples/`](./docs/examples/) para ejemplos completos:
-
-- [Simple Command](./docs/examples/simple-command.md) - Crear comandos
-- [Auth Middleware](./docs/examples/middleware-auth.md) - Middleware de autenticación
-- [Webhook Setup](./docs/examples/webhook-setup.md) - Configurar webhook
+- Logger estructurado (no console.*)
 
 ## Deployment
 
-El template incluye configuración para:
+### Docker
 
-- **Docker** - Dockerfile multi-stage incluido
-- **VPS** - Guía para deployment en VPS
-- **ngrok** - Integración para testing local
-- **Multi-entorno** - local, staging, production
+```bash
+# Build
+docker build -t mks-telegram-bot .
 
-Ver [CLAUDE.deploy.md](./CLAUDE.deploy.md) para guía completa de deployment.
+# Run
+docker-compose up bot-production
+```
+
+### Multi-Instancia
+
+El template detecta conflictos de instancias:
+
+```bash
+# Ver instancias corriendo
+bun run cli status
+
+# Iniciar en entorno específico
+TG_ENV=staging bun run start
+```
+
+Ver [CLAUDE.deploy.md](./CLAUDE.deploy.md) para guía completa.
+
+## Documentación
+
+| Documento | Descripción |
+| --------- | ----------- |
+| [Getting Started](./docs/getting-started.md) | Guía de inicio paso a paso |
+| [Environment](./docs/environment.md) | Variables de entorno |
+| [CLI Commands](./docs/cli-commands.md) | Comandos CLI disponibles |
+| [Development](./docs/development.md) | Flujo de desarrollo |
+| [Troubleshooting](./docs/troubleshooting.md) | Problemas comunes |
+
+**Para Claude:**
+- [CLAUDE.md](./CLAUDE.md) - Entry point principal
+- [CLAUDE.dev.md](./CLAUDE.dev.md) - Guía de desarrollo
+- [CLAUDE.deploy.md](./CLAUDE.deploy.md) - Deployment y entornos
 
 ## License
 

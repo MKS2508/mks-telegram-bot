@@ -5,9 +5,8 @@
 Guía de deployment para multi-entorno y multi-instancia.
 
 **Documentación relacionada**:
-- [docs/deployment/docker.mdx](./docs/deployment/docker.mdx)
-- [docs/deployment/vps.mdx](./docs/deployment/vps.mdx)
-- [docs/deployment/environments.mdx](./docs/deployment/environments.mdx)
+- [docs/environment.md](./docs/environment.md)
+- [docs/troubleshooting.md](./docs/troubleshooting.md)
 
 ---
 
