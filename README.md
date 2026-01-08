@@ -18,7 +18,7 @@ Template listo para producción con soporte **multibot**, multi-entorno, multi-i
 
 ### Opción A: Bootstrap Automático (Recomendado)
 
-El comando `bootstrap` crea automáticamente el bot, grupo/forum y topics:
+Usa `@mks2508/telegram-bot-manager` para crear automáticamente el bot, grupo/forum y topics:
 
 ```bash
 # Usar el template
@@ -33,7 +33,7 @@ cd my-bot
 bun install
 
 # Bootstrap interactivo (crea bot, grupo, topics y configura .env)
-bun run bootstrap
+npx @mks2508/telegram-bot-manager bootstrap
 ```
 
 El comando `bootstrap` te guiará paso a paso:
