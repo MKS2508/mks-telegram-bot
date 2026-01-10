@@ -3,14 +3,24 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "build": "rolldown --config rolldown.config.ts && tsgo --emitDeclarationOnly",
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "typecheck": "tsgo --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "dependencies": {
     "@mks2508/telegram-bot-utils": "workspace:*",
     "@mks2508/telegram-message-builder": "0.3.1",
     "telegraf": "^4.16.3",
     "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "rolldown": "^1.0.0-beta.58"
   }
 }

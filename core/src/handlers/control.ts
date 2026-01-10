@@ -2,7 +2,7 @@ import type { Context } from 'telegraf'
 import { updateConfig, getConfig } from '../config/index.js'
 import { botLogger, controlLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { botManager } from '../utils/bot-manager.js'
-import { MessageBuilder } from '../utils/message-builder.js'
+import { TelegramMessageBuilder } from '@mks2508/telegram-message-builder'
 
 export async function handleStop(ctx: Context): Promise<void> {
   const userId = ctx.from?.id ?? 'unknown'
@@ -14,8 +14,10 @@ export async function handleStop(ctx: Context): Promise<void> {
     })}`
   )
 
-  const message = MessageBuilder.markdown().text('🛑 Shutting down bot...').build()
-  ctx.reply(message, { parse_mode: 'Markdown' })
+  const message = TelegramMessageBuilder.text()
+    .text('🛑 Shutting down bot...')
+    .build()
+  ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
   process.exit(0)
 }
 
@@ -29,15 +31,17 @@ export async function handleRestart(ctx: Context): Promise<void> {
     })}`
   )
 
-  const builder1 = MessageBuilder.markdown()
-  builder1.text('🔄 Restarting bot...')
-  ctx.reply(builder1.build(), { parse_mode: builder1.getParseMode() })
+  const message1 = TelegramMessageBuilder.text()
+    .text('🔄 Restarting bot...')
+    .build()
+  ctx.reply(message1.text || '', { parse_mode: (message1.parse_mode || 'HTML') as any })
 
   botManager.resetStats()
 
-  const builder2 = MessageBuilder.markdown()
-  builder2.text('✅ Bot stats reset. Restarting...')
-  ctx.reply(builder2.build(), { parse_mode: builder2.getParseMode() })
+  const message2 = TelegramMessageBuilder.text()
+    .text('✅ Bot stats reset. Restarting...')
+    .build()
+  ctx.reply(message2.text || '', { parse_mode: (message2.parse_mode || 'HTML') as any })
   process.exit(0)
 }
 
@@ -48,34 +52,37 @@ export async function handleMode(ctx: Context): Promise<void> {
 
   if (!mode || (mode !== 'polling' && mode !== 'webhook')) {
     const config = getConfig()
-    const builder = MessageBuilder.markdown()
-      .title('📡 Current Mode:')
+    const message = TelegramMessageBuilder.text()
+      .title('📡 Current Mode')
       .newline()
       .line('Mode', config.mode, { code: true })
       .newline()
       .text('Usage: /mode <polling|webhook>')
+      .build()
 
-    ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+    ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
     return
   }
 
   if (mode === 'webhook') {
     const config = getConfig()
     if (!config.webhookUrl) {
-      const builder = MessageBuilder.markdown()
+      const message = TelegramMessageBuilder.text()
         .text('❌ Webhook URL not configured. Set TG_WEBHOOK_URL environment variable.')
-      ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+        .build()
+      ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
       return
     }
   }
 
   updateConfig({ mode })
 
-  const builder = MessageBuilder.markdown()
+  const message = TelegramMessageBuilder.text()
     .text('✅ Mode changed to:')
     .line('Mode', mode, { code: true })
+    .build()
 
-  ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+  ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
 
   controlLogger.info(
     `${badge('MODE', 'rounded')} ${kv({
@@ -89,18 +96,20 @@ export async function handleWebhook(ctx: Context): Promise<void> {
   const config = getConfig()
 
   if (config.mode !== 'webhook') {
-    const builder = MessageBuilder.markdown()
+    const message = TelegramMessageBuilder.text()
       .text('❌ Bot is not in webhook mode. Use /mode webhook first.')
-    ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+      .build()
+    ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
     return
   }
 
-  const builder = MessageBuilder.markdown()
-    .title('🔗 Webhook Configuration:')
+  const message = TelegramMessageBuilder.text()
+    .title('🔗 Webhook Configuration')
     .newline()
     .line('URL', config.webhookUrl || 'Not set', { code: true })
+    .build()
 
-  ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+  ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
 
   controlLogger.info(
     `${badge('WEBHOOK', 'rounded')} ${kv({

@@ -5,7 +5,6 @@
     "": {
       "name": "mks-telegram-bot",
       "dependencies": {
-        "@flla/telegram-format": "^3.1.2",
         "@inquirer/prompts": "^8.1.0",
         "@mks2508/telegram-bot-utils": "workspace:*",
         "@mks2508/telegram-message-builder": "0.3.1",
@@ -46,8 +45,6 @@
   },
   "packages": {
     "@cryptography/aes": ["@cryptography/aes@0.1.1", "", {}, "sha512-PcYz4FDGblO6tM2kSC+VzhhK62vml6k6/YAkiWtyPvrgJVfnDRoHGDtKn5UiaRRUrvUTTocBpvc2rRgTCqxjsg=="],
-
-    "@flla/telegram-format": ["@flla/telegram-format@3.1.2", "", {}, "sha512-pmBcT0f2ay77WlVq0EX3KseFp07IXU7QYahsY/Halx4/YnsM70qYeLRBoKysukU/l0ZQ2u15xu9rMECm9ov2+A=="],
 
     "@inquirer/ansi": ["@inquirer/ansi@2.0.2", "", {}, "sha512-SYLX05PwJVnW+WVegZt1T4Ip1qba1ik+pNJPDiqvk6zS5Y/i8PhRzLpGEtVd7sW0G8cMtkD8t4AZYhQwm8vnww=="],
 

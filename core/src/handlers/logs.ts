@@ -2,7 +2,7 @@ import type { Context, Telegraf } from 'telegraf'
 import { getConfig, hasLoggingConfigured } from '../config/index.js'
 import { streamLogger, botLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 import { formatLogEntry } from '../utils/formatters.js'
-import { MessageBuilder } from '../utils/message-builder.js'
+import { TelegramMessageBuilder } from '@mks2508/telegram-message-builder'
 
 const LOG_BUFFER_SIZE = 10
 const LOG_BUFFER_TIMEOUT = 5000
@@ -103,9 +103,10 @@ export async function handleLogsCommand(ctx: Context): Promise<void> {
   const config = getConfig()
 
   if (!hasLoggingConfigured()) {
-    const builder = MessageBuilder.markdown()
+    const message = TelegramMessageBuilder.text()
       .text('❌ Logging is not configured. Set TG_LOG_CHAT_ID environment variable.')
-    ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+      .build()
+    ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
     return
   }
 
@@ -120,8 +121,8 @@ export async function handleLogsCommand(ctx: Context): Promise<void> {
     })}`
   )
 
-  const builder = MessageBuilder.markdown()
-    .title('📝 Log Streaming Status:')
+  const builder = TelegramMessageBuilder.text()
+    .title('📝 Log Streaming Status')
     .newline()
     .line('Status', status, { code: true })
     .line('Chat ID', String(config.logChatId), { code: true })
@@ -129,5 +130,6 @@ export async function handleLogsCommand(ctx: Context): Promise<void> {
     builder.line('Topic ID', String(config.logTopicId), { code: true })
   }
 
-  ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+  const message = builder.build()
+  ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
 }

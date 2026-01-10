@@ -1,7 +1,7 @@
 import type { Context } from 'telegraf'
 import { getConfig } from '../config/index.js'
-import { formatHealthMessage, formatUptime } from '../utils/formatters.js'
-import { MessageBuilder } from '../utils/message-builder.js'
+import { formatUptime } from '../utils/formatters.js'
+import { TelegramMessageBuilder } from '@mks2508/telegram-message-builder'
 import { healthLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
 
 export async function handleHealth(ctx: Context): Promise<void> {
@@ -18,15 +18,21 @@ export async function handleHealth(ctx: Context): Promise<void> {
   const uptime = Date.now() - (Date.now() - 10000)
   const memoryUsage = process.memoryUsage()
 
-  const message = formatHealthMessage({
-    status: 'running' as const,
-    mode: config.mode,
-    startTime: Date.now() - 10000,
-    uptime,
-    memoryUsage,
-  })
+  const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(2)
 
-  await ctx.reply(message, { parse_mode: 'Markdown' })
+  const message = TelegramMessageBuilder.text()
+    .title('🏥 Bot Health Status')
+    .newline()
+    .line('Status', 'RUNNING', { bold: true })
+    .line('Mode', config.mode.toUpperCase())
+    .line('Uptime', formatUptime(uptime))
+    .newline()
+    .section('Memory Usage')
+    .text(`RSS: ${mb(memoryUsage.rss)}MB`)
+    .text(`Heap: ${mb(memoryUsage.heapUsed)}/${mb(memoryUsage.heapTotal)}MB`)
+    .build()
+
+  await ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
 }
 
 export async function handleUptime(ctx: Context): Promise<void> {
@@ -41,11 +47,12 @@ export async function handleUptime(ctx: Context): Promise<void> {
 
   const uptime = Date.now() - (Date.now() - 10000)
 
-  const builder = MessageBuilder.markdown()
+  const message = TelegramMessageBuilder.text()
     .title('⏱️ Uptime:')
     .text(formatUptime(uptime))
+    .build()
 
-  await ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+  await ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
 }
 
 export async function handleStats(ctx: Context): Promise<void> {
@@ -60,7 +67,7 @@ export async function handleStats(ctx: Context): Promise<void> {
 
   const config = getConfig()
 
-  const builder = MessageBuilder.markdown()
+  const message = TelegramMessageBuilder.text()
     .title('📊 Bot Statistics')
     .newline()
     .section('Performance')
@@ -73,6 +80,7 @@ export async function handleStats(ctx: Context): Promise<void> {
     .line('Log Level', config.logLevel.toUpperCase())
     .line('Logging Enabled', config.logChatId ? '✅' : '❌')
     .line('Control Enabled', config.controlChatId ? '✅' : '❌')
+    .build()
 
-  await ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+  await ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
 }

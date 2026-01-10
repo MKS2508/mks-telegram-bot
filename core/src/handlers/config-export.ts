@@ -2,7 +2,7 @@ import type { Context } from 'telegraf'
 import { badge, kv, colors, colorText } from '../middleware/logging.js'
 import { getConfig } from '../config/index.js'
 import { configLogger } from '@mks2508/telegram-bot-utils'
-import { MessageBuilder } from '../utils/message-builder.js'
+import { TelegramMessageBuilder } from '@mks2508/telegram-message-builder'
 
 const collectedTopics = new Map<number, string>()
 
@@ -19,14 +19,14 @@ export async function handleExportConfig(ctx: Context): Promise<void> {
   )
 
   const config = getConfig()
-  const builder = MessageBuilder.markdown()
+  const builder = TelegramMessageBuilder.text()
 
   // Title
   builder.title('🔧 Current Configuration')
   builder.newline()
 
   // Environment
-  builder.section('Environment:')
+  builder.section('Environment')
   builder.line('TG_ENV', config.environment, { code: true })
   builder.line('TG_INSTANCE_NAME', config.instanceName, { code: true })
   builder.line('TG_MODE', config.mode, { code: true })
@@ -35,13 +35,13 @@ export async function handleExportConfig(ctx: Context): Promise<void> {
   // Bot Token (masked)
   if (config.botToken) {
     const masked = config.botToken.slice(0, 6) + '...' + config.botToken.slice(-6)
-    builder.section('Bot:')
+    builder.section('Bot')
     builder.line('TG_BOT_TOKEN', masked, { code: true })
     builder.newline()
   }
 
   // Control
-  builder.section('Control Commands:')
+  builder.section('Control Commands')
   if (config.controlChatId) {
     builder.line('TG_CONTROL_CHAT_ID', String(config.controlChatId), { code: true })
   } else {
@@ -61,7 +61,7 @@ export async function handleExportConfig(ctx: Context): Promise<void> {
   }
 
   // Logging
-  builder.section('Logging:')
+  builder.section('Logging')
   if (config.logChatId) {
     builder.line('TG_LOG_CHAT_ID', String(config.logChatId), { code: true })
   } else {
@@ -77,7 +77,7 @@ export async function handleExportConfig(ctx: Context): Promise<void> {
 
   // Webhook
   if (config.mode === 'webhook') {
-    builder.section('Webhook:')
+    builder.section('Webhook')
     builder.line('TG_WEBHOOK_URL', config.webhookUrl || 'not_set', { code: true })
     builder.line('TG_WEBHOOK_SECRET', config.webhookSecret || 'not_set', { code: true })
     builder.newline()
@@ -89,13 +89,14 @@ export async function handleExportConfig(ctx: Context): Promise<void> {
   builder.newline()
 
   // Instructions
-  builder.section('📋 Quick Setup:')
+  builder.section('📋 Quick Setup')
   builder.listItem('Create topics: General, Control, Logs')
   builder.listItem('Mention @bot_username in each topic')
   builder.listItem('Use /getinfo to get Thread IDs')
   builder.listItem('Update .env with the IDs')
 
-  await ctx.reply(builder.build(), { parse_mode: builder.getParseMode() })
+  const message = builder.build()
+  await ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
   configLogger.success(`Config exported for user ${userId}`)
 }
 

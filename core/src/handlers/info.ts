@@ -1,6 +1,6 @@
 import type { Context } from 'telegraf'
 import { infoLogger, badge, kv, colors, colorText } from '../middleware/logging.js'
-import { MessageBuilder } from '../utils/message-builder.js'
+import { TelegramMessageBuilder } from '@mks2508/telegram-message-builder'
 
 export async function handleGetInfo(ctx: Context): Promise<void> {
   const userId = ctx.from?.id ?? 'unknown'
@@ -17,16 +17,14 @@ export async function handleGetInfo(ctx: Context): Promise<void> {
   const from = ctx.from
   const chat = ctx.chat
 
-  const builder = MessageBuilder.markdown()
-
-  // Title
-  builder.title('📋 Your Information')
-  builder.newline()
+  const builder = TelegramMessageBuilder.text()
+    .title('📋 Your Information')
+    .newline()
 
   // User info
   if (from) {
     builder.section('👤 User Info:')
-    builder.line('User ID', String(from.id), { code: true })
+      .line('User ID', String(from.id), { code: true })
     if (from.username) builder.line('Username', `@${from.username}`)
     if (from.first_name) builder.line('First Name', from.first_name)
     if (from.last_name) builder.line('Last Name', from.last_name)
@@ -38,8 +36,8 @@ export async function handleGetInfo(ctx: Context): Promise<void> {
   // Chat info
   if (chat) {
     builder.section('💬 Chat Info:')
-    builder.line('Chat ID', String(chat.id), { code: true })
-    builder.line('Type', chat.type)
+      .line('Chat ID', String(chat.id), { code: true })
+      .line('Type', chat.type)
     if ('title' in chat && chat.title) builder.line('Title', chat.title)
     if ('username' in chat && chat.username) builder.line('Username', `@${chat.username}`)
     if (chat.type === 'supergroup' || chat.type === 'group') {
@@ -53,7 +51,7 @@ export async function handleGetInfo(ctx: Context): Promise<void> {
     const botMention = detectBotMention(msg as unknown as MaybeMessage, botUsername)
     if (botMention.isMentioned) {
       builder.section('🤖 Bot Mention:')
-      builder.line('Bot mentioned', 'Yes')
+        .line('Bot mentioned', 'Yes')
       if (botMention.type) builder.line('Mention type', botMention.type)
       if (botMention.replyToBot) builder.text('Replying to bot message')
       builder.newline()
@@ -64,7 +62,7 @@ export async function handleGetInfo(ctx: Context): Promise<void> {
   // Message/Topic info
   if (msg) {
     builder.section('📮 Message Info:')
-    builder.line('Message ID', String(msg.message_id))
+      .line('Message ID', String(msg.message_id))
     if ('reply_to_message' in msg && msg.reply_to_message) {
       const replyTo = msg.reply_to_message
       builder.line('Reply to message ID', String(replyTo.message_id))
@@ -75,31 +73,31 @@ export async function handleGetInfo(ctx: Context): Promise<void> {
   const threadId = getThreadId(msg as unknown as MaybeMessage)
   if (threadId) {
     builder.newline()
-    builder.section('🧵 Thread/Topic:')
-    builder.line('Thread ID', String(threadId), { code: true })
-    builder.text('This message is in a topic')
-    builder.newline()
+      .section('🧵 Thread/Topic:')
+      .line('Thread ID', String(threadId), { code: true })
+      .text('This message is in a topic')
+      .newline()
     infoLogger.info(`Message sent in thread ${threadId} by user ${userId}`)
   }
 
   // Configuration tips
   builder.newline()
-  builder.section('🔧 Configuration:')
-  builder.line('TG_CONTROL_CHAT_ID', String(chat?.id ?? 'N/A'), { code: true })
-  builder.line('TG_AUTHORIZED_USER_IDS', String(from?.id ?? 'N/A'))
+    .section('🔧 Configuration:')
+    .line('TG_CONTROL_CHAT_ID', String(chat?.id ?? 'N/A'), { code: true })
+    .line('TG_AUTHORIZED_USER_IDS', String(from?.id ?? 'N/A'))
   if (threadId) {
     builder.line('TG_CONTROL_TOPIC_ID', String(threadId), { code: true })
   }
 
   builder.newline()
-  builder.text('💡 Copy these values to your .env file')
-  builder.newline()
-  builder.newline()
-  builder.text('💡 Tip: In groups, you can also mention the bot with @username to get this info')
+    .text('💡 Copy these values to your .env file')
+    .newline()
+    .newline()
+    .text('💡 Tip: In groups, you can also mention the bot with @username to get this info')
 
   const message = builder.build()
   infoLogger.info(`Replying to user ${userId} with info`)
-  await ctx.reply(message, { parse_mode: builder.getParseMode() })
+  await ctx.reply(message.text || '', { parse_mode: (message.parse_mode || 'HTML') as any })
   infoLogger.success(`Info sent to user ${userId}`)
 }
 
