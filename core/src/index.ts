@@ -10,6 +10,10 @@ import { handleGetInfo } from './handlers/info.js'
 import { handleStop, handleRestart, handleMode, handleWebhook } from './handlers/control.js'
 import { handleLogsCommand, initializeLogStreamer } from './handlers/logs.js'
 import { handleExportConfig } from './handlers/config-export.js'
+import { handleTextDemo } from './handlers/demo-text.js'
+import { handleKeyboardDemo, handleKeyboardCallback } from './handlers/demo-keyboard.js'
+import { handleMediaDemo, handleMediaCallback } from './handlers/demo-media.js'
+import { handleFullDemo, handleFullDemoCallback } from './handlers/demo-full.js'
 import { auth } from './middleware/auth.js'
 import { initializeFileLogging } from './config/logging.js'
 
@@ -75,7 +79,12 @@ async function main(): Promise<void> {
         '/stats - Show statistics\n' +
         '/logs - Check log streaming status\n' +
         '/getinfo - Get your user/chat info for configuration\n' +
-        '/mode - Check or change bot mode',
+        '/mode - Check or change bot mode\n\n' +
+        '*🎨 Demo Commands (telegram-message-builder):*\n' +
+        '/textdemo - Text formatting showcase\n' +
+        '/keybdemo - Keyboard builder showcase\n' +
+        '/mediademo - Media types showcase\n' +
+        '/fulldemo - Complete feature demo',
       { parse_mode: 'Markdown' }
     )
     botManager.incrementMessages()
@@ -136,6 +145,16 @@ async function main(): Promise<void> {
   }
 
   bot.command('logs', handleLogsCommand)
+
+  // Demo commands for telegram-message-builder showcase
+  bot.command('textdemo', handleTextDemo)
+  bot.command('keybdemo', handleKeyboardDemo)
+  bot.command('mediademo', handleMediaDemo)
+  bot.command('fulldemo', handleFullDemo)
+
+  // Callback handlers for demo keyboards
+  bot.action(/^(demo_yes|demo_no|demo_refresh|demo_search|full_demo_keyboard)$/, handleKeyboardCallback)
+  bot.action(/^(media_photo|media_video|media_document|media_audio|media_voice|full_demo_media)$/, handleMediaCallback)
 
   process.once('SIGINT', async () => {
     botLogger.info(`${badge('SHUTDOWN', 'pill')} ${colorText('SIGINT received', colors.warning)}`)

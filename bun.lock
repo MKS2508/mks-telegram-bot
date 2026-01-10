@@ -1,11 +1,14 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "mks-telegram-bot",
       "dependencies": {
         "@flla/telegram-format": "^3.1.2",
         "@inquirer/prompts": "^8.1.0",
+        "@mks2508/telegram-bot-utils": "workspace:*",
+        "@mks2508/telegram-message-builder": "0.3.1",
         "chalk": "^5.6.2",
         "commander": "^14.0.2",
         "dotenv": "^17.2.3",
@@ -27,23 +30,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@mks2508/telegram-bot-utils": "workspace:*",
+        "@mks2508/telegram-message-builder": "0.3.1",
         "telegraf": "^4.16.3",
         "zod": "^3.24.0",
-      },
-    },
-    "packages/bootstrapper": {
-      "name": "@mks2508/bootstrapper",
-      "version": "0.1.0",
-      "dependencies": {
-        "@inquirer/prompts": "^8.1.0",
-        "@mks2508/better-logger": "^4.0.0",
-        "big-integer": "^1.6.52",
-        "telegraf": "^4.16.3",
-        "telegram": "^2.26.22",
-      },
-      "devDependencies": {
-        "@types/node": "^20",
-        "typescript": "^5",
       },
     },
     "packages/utils": {
@@ -98,13 +87,13 @@
 
     "@mks2508/better-logger": ["@mks2508/better-logger@4.0.0", "", { "dependencies": { "chalk": "^5.6.2" } }, "sha512-39PYkAKg7kC0ncPjcN5zAwTsLIS+iXoL4294gl3Cm4OAI6sAT7YJ+RccD42Ve5ybRC/TGgJnD0AUH5M26w0pWA=="],
 
-    "@mks2508/bootstrapper": ["@mks2508/bootstrapper@workspace:packages/bootstrapper"],
-
     "@mks2508/no-throw": ["@mks2508/no-throw@0.1.0", "", {}, "sha512-/CI8FqiO3oLw66XIQ07mw13b6PDNh1vit0cGzUBLq5MfJUTKDU0yaKFE0l9CqSpe6xv4n4+z4RWEytP5xePKZQ=="],
 
     "@mks2508/telegram-bot-core": ["@mks2508/telegram-bot-core@workspace:core"],
 
     "@mks2508/telegram-bot-utils": ["@mks2508/telegram-bot-utils@workspace:packages/utils"],
+
+    "@mks2508/telegram-message-builder": ["@mks2508/telegram-message-builder@0.3.1", "", {}, "sha512-i/BdbxVq13l8XzCUq8jMkFfYjrTXiCdErpzo9tEazLLqqEucAm2aY9HE5i8U+15mEWeSV4D6I9gfU8a5dSn1Cw=="],
 
     "@oxlint/darwin-arm64": ["@oxlint/darwin-arm64@1.38.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-9rN3047QTyA4i73FKikDUBdczRcLtOsIwZ5TsEx5Q7jr5nBjolhYQOFQf9QdhBLdInxw1iX4+lgdMCf1g74zjg=="],
 

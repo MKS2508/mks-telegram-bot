@@ -5,7 +5,7 @@
   "type": "module",
   "workspaces": [
     "core",
-    "apps/*"
+    "packages/*"
   ],
   "scripts": {
     "dev": "bun run --filter @mks2508/telegram-bot-core dev",
@@ -39,6 +39,8 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@mks2508/telegram-message-builder": "0.3.1",
+    "@mks2508/telegram-bot-utils": "workspace:*",
     "@flla/telegram-format": "^3.1.2",
     "@inquirer/prompts": "^8.1.0",
     "chalk": "^5.6.2",

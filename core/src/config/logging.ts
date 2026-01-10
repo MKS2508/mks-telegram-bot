@@ -54,9 +54,7 @@ let fileHandlersInitialized = false
  *   fileLogLevels: ['error', 'critical']
  * })
  */
-export function initializeFileLogging(
-  config: Partial<FileLoggingConfig> = {}
-): void {
+export function initializeFileLogging(config: Partial<FileLoggingConfig> = {}): void {
   // Setup logger with debug/logLevel options
   const appConfig = getConfig()
   setupLogger({ debug: appConfig.debug, logLevel: appConfig.logLevel })
