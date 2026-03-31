@@ -11,13 +11,133 @@
 |-------------|----------------------|-----|
 | **Runtime** | Bun v1.1.43+ | Package manager + runtime |
 | **Bundling** | Rolldown v1.0.0-beta.58 | Build de packages |
-| **Type Checking** | TSGO v7.0.0-dev (@typescript/native-preview) | TypeScript compiler |
+| **Declaration Emit** | tsc (TypeScript compiler) | Generar archivos .d.ts |
+| **Type Checking** | TSGO v7.0.0-dev (@typescript/native-preview) | Type-checking SOLAMENTE |
 | **Linting** | Oxlint v0.11.1 | Linting rapido (OxC-based) |
 | **Formatting** | Prettier v3.4.2 + organize-imports | Formato de codigo |
 | **Validation** | Arktype | Validacion de esquemas |
 | **Versioning** | Changesets v2.27.11 | Versionado de packages |
 | **Logging** | @mks2508/better-logger v4.0.0 | Logging estructurado |
 | **Error Handling** | @mks2508/no-throw v0.1.0 | Result pattern |
+| **Commit Generation** | gemini-commit-wizard v1.1.3 | Commits estructurados con IA multi-provider |
+| **Dev Sessions** | @mks2508/mks-dev-session v0.1.0 | Sesiones tmux configurables por proyecto |
+
+---
+
+## ⚠️ CRITICAL: tsgo NO emite declaraciones
+
+**tsgo (@typescript/native-preview)** es SOLO un type-checker. NO puede generar archivos `.d.ts`.
+
+```bash
+# ❌ INCORRECTO - No genera ningun output (silencioso)
+tsgo --emitDeclarationOnly
+tsgo -b
+
+# ✅ CORRECTO - Build script completo
+"build": "rm -rf dist && rolldown --config rolldown.config.ts && tsc --emitDeclarationOnly"
+
+# ✅ CORRECTO - Typecheck con tsgo
+"typecheck": "tsgo --noEmit"
+```
+
+### Build commands por herramienta
+
+| Comando | Herramienta | Proposito |
+|---------|-------------|-----------|
+| `rolldown --config rolldown.config.ts` | Rolldown | Bundling JS |
+| `tsc --emitDeclarationOnly` | tsc | Generar .d.ts files |
+| `tsgo --noEmit` | tsgo | Type-checking |
+| `oxlint` | Oxlint | Linting |
+
+### Reglas tsconfig.json
+
+- `composite: true` SOLO si usas `tsc -b` (project references)
+- `declarationDir: ./dist` SIEMPRE explicito
+- `emitDeclarationOnly` va en el script de build, NO en tsconfig
+
+---
+
+## Commit Workflow — gemini-commit-wizard
+
+**OBLIGATORIO**: Usar `bun run commit` para TODOS los commits. NUNCA hacer commits manuales sin formato estructurado.
+
+### Providers Disponibles
+
+| Provider | Variable de Entorno | Modelo Default | Velocidad |
+|----------|-------------------|---------------|-----------|
+| **Gemini SDK** | `GEMINI_API_KEY` | `gemini-2.5-flash` | Rapido |
+| **Groq** | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | Ultra-rapido |
+| **OpenRouter** | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-4` | Variable |
+| **Gemini CLI** | _(necesita binario `gemini`)_ | CLI default | Moderado |
+
+**Auto-deteccion**: Gemini SDK > Groq > OpenRouter > Gemini CLI. El primer provider con API key valida se usa automaticamente.
+
+### Comandos
+
+```bash
+# Commit interactivo con IA (auto-detecta provider)
+bun run commit
+
+# Modo rapido sin prompts
+bun run commit:quick
+
+# Auto-aprobar sin push
+bun run commit:auto
+
+# Provider especifico
+bun run commit -- --provider groq
+
+# Provider + modelo especifico
+bun run commit -- --provider openrouter --model anthropic/claude-sonnet-4
+```
+
+### Formato de Commit Estructurado
+
+```
+type(scope): description
+
+Body text (en idioma configurado)
+
+<technical>
+- Detalles tecnicos: archivos, funciones, tipos modificados
+</technical>
+
+<changelog>
+## [Type] [Emoji]
+Entrada de changelog orientada al usuario
+</changelog>
+```
+
+**Types validos**: `feat`, `fix`, `refactor`, `docs`, `test`, `feat-phase` (feature incompleta)
+
+### Configuracion por Proyecto
+
+Crear `.commit-wizard.json` en la raiz del proyecto:
+
+```json
+{
+  "name": "mi-proyecto",
+  "description": "Descripcion breve",
+  "techStack": ["TypeScript", "Bun"],
+  "components": [
+    { "id": "api", "path": "src/api/", "name": "REST API" }
+  ],
+  "commitFormat": {
+    "titleLanguage": "english",
+    "bodyLanguage": "spanish",
+    "includeTechnical": true,
+    "includeChangelog": true
+  },
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile"
+}
+```
+
+### Prohibido
+
+- `git commit -m "mensaje"` sin formato estructurado
+- Commits sin `<technical>` y `<changelog>` sections
+- Usar providers sin API key configurada (el wizard valida automaticamente)
 
 ---
 
@@ -1167,38 +1287,42 @@ Antes de hacer commit de codigo, verificar:
 
 ---
 
-## REGLA 13: UI Components - Shadcn/UI + Animate UI
+## REGLA 13: UI Components - Shadcn MCP + React Bits + lucide-animated
 
 ### Stack de Componentes UI
 
-**OBLIGATORIO**: Shadcn/UI como base, con **Animate UI como fuente principal** de componentes animados.
+**OBLIGATORIO**: Usar Shadcn MCP Server para instalar componentes via registries externos.
 
-### Formato de Comandos
+| Registry | URL | Tipo | Prioridad |
+|----------|-----|------|-----------|
+| **@animate-ui** | `https://animate-ui.com/r/{name}.json` | Componentes Shadcn con animaciones | **1º PREFERIDO** |
+| **@react-bits** | `https://reactbits.dev/r/{name}.json` | Componentes interactivos/efectos | **2º PREFERIDO** |
+| **@lucide-animated** | `https://lucide-animated.com/r/{name}.json` | Iconos animados (350+) | **PREFERIDO** |
+| **@prompt-kit** | `https://prompt-kit.com/c/{name}.json` | Chat/Prompt UI | **PREFERIDO** para agents |
+| **@shadcn** | Registry base | Componentes base estándar | Fallback |
+
+### Configuracion MCP Server (Primera vez)
 
 ```bash
-# CORRECTO - Formato estandar con Bun
-bunx --bun shadcn@latest add @animate-ui/primitives-texts-sliding-number
-bunx --bun shadcn@latest add @animate-ui/primitives-button
-bunx --bun shadcn@latest add @animate-ui/primitives-card
+# En el directorio del proyecto
+npx shadcn@latest mcp init --client claude
 
-# CORRECTO - Componentes base Shadcn (cuando no exista en Animate UI)
-bunx --bun shadcn@latest add button
-bunx --bun shadcn@latest add card
-bunx --bun shadcn@latest add dialog
+# Esto genera .mcp.json en la raiz del proyecto:
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
+    }
+  }
+}
 
-# Ver registry disponible
-# https://ui.shadcn.com/docs/mcp
+# Reiniciar Claude Code y verificar con /mcp
 ```
 
-### Fuentes de Componentes
-
-| Fuente | Prefijo | Tipo | Prioridad |
-|--------|---------|------|-----------|
-| **Animate UI** | `@animate-ui/primitives-*` | Componentes con animaciones | **PREFERIDO** |
-| **Shadcn Registry** | `shadcn/*` | Componentes base estándar | Alternativa |
-| **Radix UI** | `@radix-ui/*` | Primitivas sin estilos | Solo si es necesario |
-
 ### Configuracion de components.json
+
+**OBLIGATORIO**: Agregar registries externos al `components.json`:
 
 ```json
 {
@@ -1207,209 +1331,232 @@ bunx --bun shadcn@latest add dialog
   "rsc": false,
   "tsx": true,
   "tailwind": {
-    "config": "tailwind.config.ts",
+    "config": "",
     "css": "src/app/globals.css",
-    "baseColor": "neutral",
+    "baseColor": "zinc",
     "cssVariables": true,
     "prefix": ""
   },
+  "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",
-    "ui": "@/components/ui"
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
   },
-  "registry": "https://ui.shadcn.com"
+  "registries": {
+    "@animate-ui": "https://animate-ui.com/r/{name}.json",
+    "@react-bits": "https://reactbits.dev/r/{name}.json",
+    "@lucide-animated": "https://lucide-animated.com/r/{name}.json",
+    "@prompt-kit": "https://prompt-kit.com/c/{name}.json"
+  }
 }
 ```
+
+### Comandos de Instalacion
+
+```bash
+# 1º Animate UI (componentes Shadcn con animaciones - PREFERIDO)
+bunx --bun shadcn@latest add @animate-ui/sliding-number
+bunx --bun shadcn@latest add @animate-ui/morphing-text
+bunx --bun shadcn@latest add @animate-ui/animated-card
+bunx --bun shadcn@latest add @animate-ui/progress-reveal
+
+# 2º React Bits (efectos interactivos)
+bunx --bun shadcn@latest add @react-bits/fade-content
+bunx --bun shadcn@latest add @react-bits/magnet
+bunx --bun shadcn@latest add @react-bits/dock
+
+# 3º Iconos animados lucide-animated
+bunx --bun shadcn@latest add @lucide-animated/check-circle
+bunx --bun shadcn@latest add @lucide-animated/loader
+bunx --bun shadcn@latest add @lucide-animated/play
+
+# 4º prompt-kit (chat/agent UI)
+bunx --bun shadcn@latest add @prompt-kit/prompt-input
+bunx --bun shadcn@latest add @prompt-kit/response-stream
+
+# 5º Shadcn base (solo si no hay alternativa animada)
+bunx --bun shadcn@latest add button card dialog
+```
+
+### Uso con Claude Code MCP
+
+Despues de configurar el MCP, usar prompts naturales:
+
+```
+# React Bits
+"Show me all available backgrounds from @react-bits"
+"Add the Dither background from React Bits to the page, make it purple"
+"Add FadeContent from @react-bits for scroll animations"
+
+# lucide-animated
+"Show me all available icons from @lucide-animated"
+"Add the check-circle animated icon from lucide-animated"
+
+# Combinados
+"Create a hero section with FadeContent animation and animated icons"
+```
+
+### Componentes React Bits Recomendados
+
+| Componente | Categoria | Uso |
+|-----------|-----------|-----|
+| `fade-content` | Animations | Fade in/out con scroll |
+| `text-pressure` | Text Effects | Texto con efecto presion |
+| `magnet` | Interactions | Efecto magnetico cursor |
+| `dock` | Components | Dock estilo macOS |
+| `tilted-card` | Components | Cards con tilt 3D |
+| `spotlight-card` | Components | Cards con spotlight |
+| `dither` | Backgrounds | Fondo con efecto dither |
+| `hyperspeed` | Backgrounds | Efecto velocidad |
+
+### Iconos lucide-animated Recomendados
+
+| Icono | Uso |
+|-------|-----|
+| `check-circle` | Confirmacion, exito |
+| `x-circle` | Error, cerrar |
+| `loader` | Loading states |
+| `play` / `pause` | Media controls |
+| `arrow-up` / `arrow-down` | Navegacion |
+| `settings` | Configuracion |
+| `bell` | Notificaciones |
 
 ### Patrones de Importacion
 
 ```typescript
-// CORRECTO - Importar desde components/ui
+// CORRECTO - Componentes React Bits
+import { FadeContent } from '@/components/ui/fade-content';
+import { TextPressure } from '@/components/ui/text-pressure';
+import { Dock } from '@/components/ui/dock';
+
+// CORRECTO - Iconos animados lucide-animated
+import { CheckCircle } from '@/components/icons/check-circle';
+import { Loader } from '@/components/icons/loader';
+
+// CORRECTO - Componentes base Shadcn
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
-// CORRECTO - Componentes Animate UI
-import { SlidingNumber } from '@/components/ui/sliding-number';
-import { AnimatedCard } from '@/components/ui/animated-card';
-import { MorphingText } from '@/components/ui/morphing-text';
+// CORRECTO - Iconos estaticos (fallback)
+import { Settings } from 'lucide-react';
 
 // INCORRECTO - Importar directo desde node_modules
-import { Button } from '@radix-ui/react-button';
+import { FadeContent } from 'react-bits';
 ```
 
-### Componentes Recomendados (Animate UI)
+### Estructura de Carpetas
 
-| Componente | Prefijo | Uso |
-|-----------|---------|-----|
-| `sliding-number` | `@animate-ui/primitives-texts-*` | Números animados, contadores |
-| `morphing-text` | `@animate-ui/primitives-texts-*` | Texto que transforma entre valores |
-| `animated-card` | `@animate-ui/primitives-card*` | Tarjetas con animaciones de entrada |
-| `progress-reveal` | `@animate-ui/primitives-progress-*` | Progress con animación suave |
-| `slide-toggle` | `@animate-ui/primitives-toggle-*` | Switch con animación |
-
-### Componentes Base Shadcn (cuando Animate UI no disponible)
-
-```bash
-# Instalar componentes base esenciales
-bunx --bun shadcn@latest add button
-bunx --bun shadcn@latest add card
-bunx --bun shadcn@latest add input
-bunx --bun shadcn@latest add textarea
-bunx --bun shadcn@latest add accordion
-bunx --bun shadcn@latest add dialog
-bunx --bun shadcn@latest add dropdown-menu
-bunx --bun shadcn@latest add toast
-bunx --bun shadcn@latest add tooltip
 ```
-
-### Inicializar Shadcn/UI (Primera vez)
-
-```bash
-# En el directorio del app (ej: apps/devenv-agent-ui)
-bunx --bun shadcn@latest init
-
-# Responder las preguntas:
-# - Style: new-york (recomendado)
-# - Base color: neutral
-# - CSS variables: true
-# - Tailwind config: tailwind.config.ts
-# - Components path: @/components
-# - Utils path: @/lib/utils
+components/
+├── ui/                      # Componentes UI (Shadcn + React Bits)
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── fade-content.tsx     # React Bits
+│   ├── text-pressure.tsx    # React Bits
+│   ├── dock.tsx             # React Bits
+│   └── index.ts             # Barrel export
+├── icons/                   # Iconos animados (lucide-animated)
+│   ├── check-circle.tsx
+│   ├── loader.tsx
+│   ├── play.tsx
+│   └── index.ts             # Barrel export
+└── agent/                   # Componentes de dominio
+    └── ...
 ```
 
 ### Ejemplo Completo de Uso
 
 ```typescript
 // components/agent/MessageItem.tsx
-import { AnimatedCard } from '@/components/ui/animated-card';
-import { MorphingText } from '@/components/ui/morphing-text';
-import { SlidingNumber } from '@/components/ui/sliding-number';
-import type { IMessage } from './MessageItem.types';
+import { FadeContent } from '@/components/ui/fade-content';
+import { Card } from '@/components/ui/card';
+import { CheckCircle } from '@/components/icons/check-circle';
+import { Loader } from '@/components/icons/loader';
+import type { IMessageItemProps } from './MessageItem.types';
 
-export function MessageItem({ message }: IMessageItemProps) {
+export function MessageItem({ message, isLoading }: IMessageItemProps) {
   return (
-    <AnimatedCard className="p-4">
-      <div className="flex items-center gap-2">
-        <MorphingText>{message.content}</MorphingText>
-        {message.progress && (
-          <SlidingNumber value={message.progress.percentage} />
-        )}
-      </div>
-    </AnimatedCard>
+    <FadeContent direction="up" duration={0.4}>
+      <Card className="p-4">
+        <div className="flex items-center gap-2">
+          {isLoading ? (
+            <Loader className="w-5 h-5 animate-spin" />
+          ) : (
+            <CheckCircle className="w-5 h-5 text-green-500" />
+          )}
+          <span>{message.content}</span>
+        </div>
+      </Card>
+    </FadeContent>
   );
 }
 ```
 
-### MCP para Buscar Componentes
+### Debug MCP
 
 ```bash
-# Usar el MCP server de Shadcn para buscar componentes
-# Ver documentacion: https://ui.shadcn.com/docs/mcp
+# En Claude Code, usar /mcp para verificar conexion
+/mcp
 
-# Ejemplos de busqueda via MCP:
-# - "text animation components"
-# - "card with entrance animation"
-# - "progress with reveal effect"
-```
-
----
-
-## REGLA 14: Iconos Animados - lucie-animated
-
-### Stack de Iconos
-
-**OBLIGATORIO**: lucie-animated como fuente principal para iconos animados.
-
-### Formato de Comandos
-
-```bash
-# CORRECTO - Formato estandar con Bun
-bunx --bun shadcn@latest add @lucie-animated/a-arrow-up
-bunx --bun shadcn@latest add @lucie-animated/arrow-down
-bunx --bun shadcn@latest add @lucie-animated/check-circle
-bunx --bun shadcn@latest add @lucie-animated/x-circle
-```
-
-### Fuentes de Iconos
-
-| Fuente | Prefijo | Tipo | Prioridad |
-|--------|---------|------|-----------|
-| **lucie-animated** | `@lucie-animated/*` | Iconos animados | **PREFERIDO** |
-| **lucide-react** | `lucide-react` | Iconos estándar sin animar | Alternativa |
-| **Radix Icons** | `@radix-ui/icons` | Iconos Radix | Solo si es necesario |
-
-### Catalogo Disponible
-
-```bash
-# Ver catalogo completo en:
-# https://lucie-animated.com/
-
-# Iconos comunes disponibles:
-# - Flechas: a-arrow-up, a-arrow-down, a-arrow-left, a-arrow-right
-# - Acciones: check-circle, x-circle, plus-circle, minus-circle
-# - Navegacion: home, settings, user, bell, search
-# - Archivos: file, folder, download, upload
-# - Media: play, pause, volume, volume-x
-```
-
-### Patrones de Importacion
-
-```typescript
-// CORRECTO - Importar desde components/icons
-import { AArrowUp } from '@/components/icons/a-arrow-up';
-import { ArrowDown } from '@/components/icons/arrow-down';
-import { CheckCircle } from '@/components/icons/check-circle';
-import { XCircle } from '@/components/icons/x-circle';
-
-// CORRECTO - Icono estatico (cuando no existe version animada)
-import { Settings } from 'lucide-react';
-
-// INCORRECTO - Importar directo desde libreria
-import { AArrowUp } from '@lucie-animated/a-arrow-up';
-```
-
-### Estructura de Carpeta
-
-```
-components/
-└── icons/
-    ├── a-arrow-up.tsx       # Icono animado
-    ├── arrow-down.tsx        # Icono animado
-    ├── check-circle.tsx      # Icono animado
-    └── index.ts              # Barrel export
-```
-
-### Ejemplo Completo de Uso
-
-```typescript
-// components/agent/AgentControls.tsx
-import { AArrowUp } from '@/components/icons/a-arrow-up';
-import { Play } from '@/components/icons/play';
-import { CheckCircle } from '@/components/icons/check-circle';
-import type { IAgentControlsProps } from './AgentControls.types';
-
-export function AgentControls({ isRunning, onExecute }: IAgentControlsProps) {
-  return (
-    <div className="flex gap-2">
-      <button onClick={onExecute}>
-        {isRunning ? (
-          <CheckCircle className="w-5 h-5" />
-        ) : (
-          <Play className="w-5 h-5" />
-        )}
-      </button>
-      <AArrowUp className="w-5 h-5 animate-bounce" />
-    </div>
-  );
-}
+# Debe mostrar "shadcn" en la lista de servers activos
+# Si hay problemas, reiniciar Claude Code
 ```
 
 ### Referencias
 
-- **lucie-animated Gallery**: https://lucie-animated.com/
-- **lucide-react Documentation**: https://lucide.dev/
-- **Shadcn Icons**: https://ui.shadcn.com/docs/components/icon
+- **React Bits**: https://reactbits.dev/
+- **lucide-animated**: https://lucide-animated.com/
+- **Shadcn MCP**: https://ui.shadcn.com/docs/mcp
+- **Shadcn Registry**: https://ui.shadcn.com/
+
+---
+
+## REGLA 14: Package UI Compartido
+
+### Estructura del Package UI
+
+El monorepo tiene un package UI compartido en `core/packages/ui/` para componentes reutilizables:
+
+```
+core/packages/ui/
+├── src/
+│   ├── components/
+│   │   ├── ui/              # Componentes Shadcn + React Bits
+│   │   ├── icons/           # Iconos lucide-animated
+│   │   └── agent/           # Componentes de dominio
+│   ├── lib/
+│   │   └── utils.ts         # cn() y utilidades
+│   ├── hooks/               # Hooks compartidos
+│   └── index.ts             # Barrel export
+├── components.json          # Config Shadcn con registries
+├── package.json
+├── rolldown.config.ts
+└── tsconfig.json
+```
+
+### Uso del Package UI
+
+```typescript
+// Importar desde el package compartido
+import { Button, Card, FadeContent } from 'mks-dev-environment/ui';
+import { CheckCircle, Loader } from 'mks-dev-environment/ui/icons';
+import { cn } from 'mks-dev-environment/ui/lib/utils';
+```
+
+### Instalacion de Componentes en Package UI
+
+```bash
+# Ir al directorio del package UI
+cd core/packages/ui
+
+# Instalar componentes (se guardan en src/components/ui/)
+bunx --bun shadcn@latest add @react-bits/fade-content
+bunx --bun shadcn@latest add @lucide-animated/check-circle
+bunx --bun shadcn@latest add button card
+```
 
 ### Referencias
 
@@ -1695,6 +1842,217 @@ Glassmorphism es la combinación controlada de:
 
 ---
 
+## REGLA 19: Dev Sessions — @mks2508/mks-dev-session
+
+### Package
+
+**OBLIGATORIO**: Usar `@mks2508/mks-dev-session` para gestionar sesiones tmux de desarrollo en todos los proyectos.
+
+```bash
+bun add -d @mks2508/mks-dev-session
+```
+
+### Qué es
+
+CLI y librería que crea sesiones tmux configurables por proyecto via `.devsession.json`. Detecta automáticamente el tipo de proyecto, genera panes con los comandos correctos, aplica theming powerline, maneja networking (portless/direct) y health checks.
+
+### Comandos
+
+| Comando | Descripción | Ejemplo |
+|---------|-------------|---------|
+| `mks-dev-session init` | Detecta proyecto y genera `.devsession.json` + patchea `package.json` | `mks-dev-session init --name my-app` |
+| `mks-dev-session start` | Crea sesión tmux y attach (comando default) | `bun run dev` |
+| `mks-dev-session stop` | Envía Ctrl+C a todos los panes | `bun run dev:stop` |
+| `mks-dev-session restart [pane]` | Reinicia un pane específico o todos | `mks-dev-session restart api` |
+| `mks-dev-session kill` | Mata la sesión tmux completa | `bun run dev:kill` |
+| `mks-dev-session status` | Muestra estado y health checks | `mks-dev-session status --json` |
+| `mks-dev-session attach` | Attach a sesión existente | `mks-dev-session attach` |
+| `mks-dev-session run <cmd>` | Ejecuta comando custom definido en config | `mks-dev-session run test-basic` |
+| `mks-dev-session output <pane> [N]` | Captura últimas N líneas de un pane | `mks-dev-session output api 100` |
+
+### Workflow OBLIGATORIO
+
+```bash
+# 1. Inicializar (primera vez en el proyecto)
+mks-dev-session init          # Auto-detecta tipo, genera .devsession.json
+                              # Patchea package.json con scripts dev:*
+
+# 2. Instalar dependencia
+bun install
+
+# 3. Personalizar .devsession.json si necesario
+
+# 4. Iniciar desarrollo
+bun run dev                   # = mks-dev-session start (attach automático)
+bun run dev:no-attach         # = mks-dev-session start --no-attach
+
+# 5. Gestionar sesión
+bun run dev:status            # Ver estado + health checks
+bun run dev:restart           # Reiniciar todos los panes
+bun run dev:stop              # Parar todos los comandos
+bun run dev:kill              # Matar sesión completa
+```
+
+### Scripts inyectados en package.json
+
+Al ejecutar `init`, se agregan automáticamente estos scripts:
+
+```json
+{
+  "scripts": {
+    "dev": "mks-dev-session start",
+    "dev:no-attach": "mks-dev-session start --no-attach",
+    "dev:stop": "mks-dev-session stop",
+    "dev:restart": "mks-dev-session restart",
+    "dev:status": "mks-dev-session status",
+    "dev:kill": "mks-dev-session kill"
+  }
+}
+```
+
+> Si ya existe un script `dev`, se preserva como `dev:original`.
+
+### Detección automática de proyecto
+
+`init` analiza `package.json`, `apps/`, `packages/` y dependencias para detectar:
+
+| Tipo | Indicadores | Layout default |
+|------|-------------|----------------|
+| `monorepo-fullstack` | workspaces + apps/ + backend+frontend deps | `2x2` (panes por sub-package) |
+| `monorepo-packages` | workspaces + packages/ | Según cantidad de sub-packages |
+| `backend` | Elysia, Express, Hono, Fastify, Koa | `1+2` (server + logs + shell) |
+| `frontend` | Vite, Next.js, React, Vue, Svelte, Astro | `1+2` (dev + test + shell) |
+| `library` | Sin framework de server ni frontend | `vertical` (dev watch + shell) |
+| `custom` | No detectado | `single` |
+
+Para **monorepos**, escanea `apps/`, `packages/`, `core/packages/` recursivamente (hasta 2 niveles) buscando sub-packages con script `dev`. Genera un pane por sub-package (máx 3) + shell.
+
+### Configuración `.devsession.json`
+
+```json
+{
+  "$schema": "https://unpkg.com/@mks2508/mks-dev-session/schema.json",
+  "name": "my-project",
+  "project": "My Project",
+  "layout": "2x2",
+  "theme": "tokyo-night",
+  "panes": [
+    {
+      "name": "api",
+      "title": "API Server (Elysia)",
+      "command": "bun run --filter 'my-api' dev",
+      "icon": "󰒍",
+      "color": "blue",
+      "cwd": "apps/api",
+      "env": { "API_URL": "{{api.url}}" },
+      "healthCheck": {
+        "url": "{{url}}/health",
+        "interval": 5000,
+        "timeout": 2000
+      }
+    },
+    {
+      "name": "web",
+      "title": "Frontend (Next.js)",
+      "command": "bun run --filter 'my-web' dev",
+      "icon": "󰜈",
+      "color": "green",
+      "cwd": "apps/web"
+    },
+    {
+      "name": "shell",
+      "title": "Shell + Tests",
+      "command": null,
+      "icon": "",
+      "color": "purple"
+    }
+  ],
+  "networking": {
+    "mode": "portless",
+    "portless": {
+      "port": 80,
+      "routes": {
+        "api": "api",
+        "web": "web"
+      }
+    },
+    "direct": {
+      "api": 3000,
+      "web": 3001
+    }
+  },
+  "commands": {
+    "test-basic": {
+      "description": "Run basic tests",
+      "pane": "shell",
+      "command": "bun run test"
+    }
+  }
+}
+```
+
+### Layout Presets
+
+| Layout | Descripción | Panes |
+|--------|-------------|-------|
+| `2x2` | Grid 4 panes | 4 |
+| `1+2` | 1 grande izquierda + 2 stacked derecha | 3 |
+| `2+1` | 2 stacked izquierda + 1 grande derecha | 3 |
+| `horizontal` | N panes lado a lado | N |
+| `vertical` | N panes apilados | N |
+| `single` | 1 solo pane | 1 |
+
+### Networking Modes
+
+| Modo | URL Format | Requiere |
+|------|-----------|----------|
+| `portless` | `http://api.localhost` | CLI `portless` instalado |
+| `direct` | `http://localhost:3000` | Nada (fallback) |
+| `none` | Sin URLs | — |
+
+Template variables: `{{pane.url}}` se resuelve automáticamente en `env` y `command` de cada pane.
+
+### Themes
+
+Presets disponibles: `tokyo-night` (default), `catppuccin`, `synthwave`.
+
+También acepta colores custom (hex):
+
+```json
+{
+  "theme": {
+    "bg": "#1a1b26", "bg2": "#24283b", "border": "#3b4261",
+    "muted": "#565f89", "fg": "#c0caf5",
+    "red": "#f7768e", "green": "#9ece6a", "blue": "#7aa2f7",
+    "purple": "#bb9af7", "cyan": "#7dcfff", "yellow": "#e0af68"
+  }
+}
+```
+
+### Integración con Claude Code
+
+`mks-dev-session status --json` produce output consumible por agentes:
+
+```json
+{
+  "sessionName": "my-project",
+  "exists": true,
+  "panes": [
+    { "name": "api", "title": "API Server", "running": true, "healthy": true, "url": "http://api.localhost" },
+    { "name": "web", "title": "Frontend", "running": true, "healthy": null, "url": "http://web.localhost" }
+  ],
+  "networkingMode": "portless"
+}
+```
+
+### Prohibido
+
+- Ejecutar `bun run dev` directamente sin sesión tmux (duplica procesos)
+- Crear sesiones tmux manualmente cuando `.devsession.json` existe
+- Usar `tmux send-keys` directo en lugar de `mks-dev-session run`
+
+---
+
 ## Fuentes de Referencia
 
 - **CLAUDE.md** - Guia de arquitectura del monorepo
@@ -1707,8 +2065,10 @@ Glassmorphism es la combinación controlada de:
 - **Oxlint** - https://oxlint.com/
 - **Zustand** - https://zustand-demo.pmnd.rs/
 - **Shadcn/UI** - https://ui.shadcn.com/
-- **Animate UI** - https://animate.ui/
-- **lucie-animated** - https://lucie-animated.com/
+- **Shadcn MCP** - https://ui.shadcn.com/docs/mcp
+- **React Bits** - https://reactbits.dev/
+- **lucide-animated** - https://lucide-animated.com/
+- **@mks2508/mks-dev-session** - Sesiones tmux configurables por proyecto
 
 ### Documentación en Dotfiles
 
@@ -1730,3 +2090,112 @@ mks-ui service ProductService      # Servicio Elysia
 mks-ui hook useProducts            # Custom hook
 mks-ui type Product                # Tipos TypeScript
 ```
+
+---
+
+## Coolify Deployment Workflow
+
+### Herramientas
+
+| Herramienta | Version | Uso |
+|-------------|---------|-----|
+| **create-bunspace** (mks-scaffolder) | latest | Genera Docker configs + deploy CLI |
+| **@mks2508/coolify-mks-cli-mcp** | ^0.4.x | SDK + MCP + CLI para Coolify API |
+
+### Workflow OBLIGATORIO para Deploy
+
+**NUNCA pushear codigo sin validar localmente. Cada build fallido en Coolify son 2-3 minutos perdidos.**
+
+```
+1. Local build     →  bun run build (debe pasar sin errores)
+2. Docker build    →  docker build -f Dockerfile -t <name> . (si Docker esta up)
+3. Push            →  git push (Coolify auto-deploys on push)
+```
+
+### Comandos create-bunspace coolify
+
+```bash
+# ─── Generar Docker configs ───
+create-bunspace coolify init          # Analiza proyecto → genera Dockerfile + compose + .dockerignore
+create-bunspace coolify init -y       # Modo automatico (usa defaults detectados)
+
+# ─── Deploy a Coolify ───
+create-bunspace coolify deploy        # Primera vez: crea proyecto/app + deploy
+                                      # Siguiente: redeploy desde .coolify.json
+
+# ─── Status ───
+create-bunspace coolify status        # Estado de la app + ultimos deployments
+
+# ─── Environment Variables ───
+create-bunspace coolify env sync      # Sync .env.local/.env → Coolify (upsert)
+create-bunspace coolify env sync <f>  # Sync archivo especifico
+create-bunspace coolify env list      # Listar vars en Coolify
+create-bunspace coolify env set K=V   # Setear una variable
+create-bunspace coolify env delete K  # Eliminar una variable
+```
+
+### Integrado en creacion de proyectos
+
+Al crear un proyecto nuevo con `create-bunspace`, se ofrece generar Docker configs automaticamente:
+
+```bash
+create-bunspace my-project --template monorepo
+# ... prompts del template ...
+# ? Generate Docker configs for Coolify deployment? › (Y/n)
+
+create-bunspace my-project --template monorepo --yes
+# Auto-genera Dockerfile + compose + .dockerignore con defaults
+```
+
+### Reglas Docker para Coolify
+
+| Regla | Motivo |
+|-------|--------|
+| **NUNCA usar `ports` en compose** | Usar `expose` — Coolify proxy maneja routing. `ports` causa "port already allocated" en redeploy |
+| **SIEMPRE `expose` interno** | Coolify necesita saber el puerto para proxying |
+| **Auto-deploy SIEMPRE ON** | `isAutoDeployEnabled: true` en toda app |
+| **Healthcheck sin curl** | Usar `bun -e "fetch()"` para HTTP, `kill -0 1` para procesos |
+| **Non-root user** | Debian: `groupadd/useradd`, Alpine: verificar con `id bun` |
+| **Native bindings** | `bun add <pkg> --no-save` en builder + `cp -rL` para resolver symlinks de .bun/ |
+
+### Bun Native Bindings en Docker (5 capas del problema)
+
+1. **Bun workspace hoisting**: bindings nativos van a `.bun/` cache, no a `node_modules/@pkg/`
+2. **Next.js usa Node.js**: no puede resolver desde `.bun/` → `bun add <pkg> --no-save` en root
+3. **Turbopack traza imports estaticos**: incluso en `force-dynamic` → usar `await import()` para pkgs nativos
+4. **Docker COPY ignora symlinks**: `.bun/` symlinks se rompen → `cp -rL` para aplanar antes de COPY
+5. **Standalone excluye serverExternalPackages**: COPY individual al runner
+
+**Paquetes nativos conocidos**: oxc-parser, sharp, lightningcss, @swc/core, esbuild, prisma, rolldown
+
+### Deteccion automatica del analyzer
+
+El `coolify init` detecta automaticamente:
+
+| Deteccion | Metodo |
+|-----------|--------|
+| **Framework** | deps directas + workspace deps transitivas (1 nivel) |
+| **HTTP server** | deps (elysia, express, etc.) + source (Bun.serve, .listen) |
+| **CLI subcommands** | Parsea `.command('name')` de commander/yargs en source |
+| **Build type** | `compiled` (tiene build script → dist/) o `direct-source` (run src/ directo) |
+| **Native bindings** | Scan deps contra lista conocida → genera cp -rL + COPY |
+| **Build-time vars** | `VITE_*`, `NEXT_PUBLIC_*`, `NITRO_*` → genera ARG + ENV |
+| **Postinstall** | Detecta fumadocs-mdx, prisma → `--ignore-scripts` |
+
+### .coolify.json (gitignored)
+
+Despues del primer `coolify deploy`, se guarda `.coolify.json` con el estado:
+
+```json
+{
+  "appUuid": "abc123",
+  "serverUuid": "...",
+  "projectUuid": "...",
+  "environmentUuid": "...",
+  "branch": "main",
+  "buildPack": "dockercompose",
+  "autoDeployEnabled": true
+}
+```
+
+Siguiente `coolify deploy` lee este archivo y hace redeploy directo sin prompts.
