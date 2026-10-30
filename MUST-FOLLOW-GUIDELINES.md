@@ -2127,11 +2127,14 @@ create-bunspace coolify deploy        # Primera vez: crea proyecto/app + deploy
 create-bunspace coolify status        # Estado de la app + ultimos deployments
 
 # ─── Environment Variables ───
-create-bunspace coolify env sync      # Sync .env.local/.env → Coolify (upsert)
-create-bunspace coolify env sync <f>  # Sync archivo especifico
-create-bunspace coolify env list      # Listar vars en Coolify
-create-bunspace coolify env set K=V   # Setear una variable
-create-bunspace coolify env delete K  # Eliminar una variable
+# Usar @mks2508/coolify-mks-cli-mcp (coolify CLI)
+coolify env sync                    # Sync .env → Coolify (upsert)
+coolify env sync .env.production    # Sync archivo especifico
+coolify env sync --dry-run          # Preview cambios
+coolify env sync --prune            # Delete vars que no están en el archivo
+coolify env list                    # Listar vars en Coolify
+coolify env set KEY=VALUE           # Setear una variable
+coolify env delete KEY              # Eliminar una variable
 ```
 
 ### Integrado en creacion de proyectos
